@@ -1,0 +1,152 @@
+.root {
+  flex: 1;
+  min-height: 100vh;
+  padding: 40px 24px 80px;
+}
+
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* Header */
+.header {
+  margin-bottom: 32px;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 28px;
+}
+
+.wordmark {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.wordmark span {
+  color: var(--accent);
+}
+
+.backButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: border-color var(--transition), color var(--transition);
+}
+
+.backButton:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.descriptorBox {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+.descriptorLabel {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.descriptorValue {
+  font-family: var(--font-data);
+  font-size: 13px;
+  color: var(--text);
+  word-break: break-all;
+}
+
+/* Summary bar */
+.summaryBar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.summaryCard {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  text-align: center;
+}
+
+.summaryNumber {
+  font-size: 36px;
+  font-weight: 700;
+  font-family: var(--font-data);
+  line-height: 1;
+  margin-bottom: 6px;
+}
+
+.summaryLabel {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.total .summaryNumber {
+  color: var(--text);
+}
+
+.vulnerable .summaryNumber {
+  color: var(--danger);
+}
+
+.vulnerable {
+  border-color: rgba(255, 77, 109, 0.25);
+}
+
+.clean .summaryNumber {
+  color: var(--accent);
+}
+
+.clean {
+  border-color: rgba(0, 212, 170, 0.25);
+}
+
+/* UTXO list */
+.listHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.listTitle {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.utxoList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}

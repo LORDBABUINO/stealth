@@ -1,0 +1,139 @@
+.root {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 48px 24px;
+  gap: 48px;
+}
+
+/* Scanner ring */
+.scanner {
+  position: relative;
+  width: 160px;
+  height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: var(--accent);
+  border-right-color: rgba(0, 212, 170, 0.3);
+  animation: spin 1.2s linear infinite;
+}
+
+.ring2 {
+  position: absolute;
+  inset: 12px;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  border-bottom-color: rgba(0, 212, 170, 0.4);
+  border-left-color: rgba(0, 212, 170, 0.15);
+  animation: spin 2s linear infinite reverse;
+}
+
+.ring3 {
+  position: absolute;
+  inset: 24px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 212, 170, 0.1);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.logoMark {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.logoMark span {
+  color: var(--accent);
+}
+
+/* Status messages */
+.status {
+  text-align: center;
+}
+
+.statusText {
+  font-size: 18px;
+  color: var(--text);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  animation: fadeInUp 0.4s ease forwards;
+}
+
+.dots {
+  display: inline-block;
+  animation: blink 1.2s step-end infinite;
+  color: var(--accent);
+}
+
+.descriptor {
+  margin-top: 12px;
+  font-family: var(--font-data);
+  font-size: 12px;
+  color: var(--text-muted);
+  max-width: 400px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Progress bar */
+.progressBar {
+  width: 320px;
+  max-width: 100%;
+  height: 2px;
+  background: var(--surface);
+  border-radius: 1px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 1px;
+  box-shadow: 0 0 8px var(--accent-glow);
+  animation: progress 4s linear forwards;
+}
+
+/* Keyframes */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes progress {
+  from { width: 0%; }
+  to { width: 95%; }
+}

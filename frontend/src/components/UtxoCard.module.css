@@ -1,0 +1,168 @@
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: border-color var(--transition);
+}
+
+.card:hover {
+  border-color: var(--border-hover);
+}
+
+.card.hasVulnerabilities {
+  border-left: 3px solid var(--danger);
+}
+
+.card.clean {
+  border-left: 3px solid var(--accent);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  cursor: pointer;
+  gap: 16px;
+  user-select: none;
+}
+
+.headerLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.addressRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.address {
+  font-family: var(--font-data);
+  font-size: 14px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cleanLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.headerRight {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.amount {
+  font-family: var(--font-data);
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.confirmations {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.chevron {
+  color: var(--text-muted);
+  font-size: 12px;
+  transition: transform var(--transition);
+  flex-shrink: 0;
+}
+
+.chevron.open {
+  transform: rotate(180deg);
+}
+
+/* Detail panel */
+.detail {
+  border-top: 1px solid var(--border);
+  padding: 0;
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 0.3s ease, padding 0.3s ease;
+}
+
+.detail.open {
+  max-height: 600px;
+  padding: 16px 20px;
+}
+
+.txid {
+  font-family: var(--font-data);
+  font-size: 12px;
+  color: var(--text-muted);
+  word-break: break-all;
+  margin-bottom: 16px;
+}
+
+.txidLabel {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.vulnerabilityList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.vulnItem {
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+.vulnItem.high {
+  background: var(--danger-dim);
+  border: 1px solid rgba(255, 77, 109, 0.2);
+}
+
+.vulnItem.medium {
+  background: var(--warning-dim);
+  border: 1px solid rgba(244, 162, 97, 0.2);
+}
+
+.vulnItem.low {
+  background: var(--safe-dim);
+  border: 1px solid rgba(46, 196, 182, 0.2);
+}
+
+.vulnHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.vulnDesc {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
