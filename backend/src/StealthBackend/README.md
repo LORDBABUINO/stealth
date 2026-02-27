@@ -4,6 +4,42 @@ This project uses Quarkus, the Supersonic Subatomic Java Framework.
 
 If you want to learn more about Quarkus, please visit its website: <https://quarkus.io/>.
 
+## Stealth-specific notes
+
+### Scan endpoint
+
+The frontend calls:
+
+```http
+GET /api/wallet/scan?descriptor=<output-descriptor>
+```
+
+This endpoint executes the Python detector configured by `stealth.detect.script` (default: `../../script/detect.py`) and returns its JSON report verbatim.
+
+### Detector type taxonomy
+
+`detect.py` can emit the following finding `type` values:
+
+- `ADDRESS_REUSE`
+- `CIOH`
+- `DUST`
+- `DUST_SPENDING`
+- `CHANGE_DETECTION`
+- `CONSOLIDATION`
+- `SCRIPT_TYPE_MIXING`
+- `CLUSTER_MERGE`
+- `UTXO_AGE_SPREAD`
+- `EXCHANGE_ORIGIN`
+- `TAINTED_UTXO_MERGE`
+- `BEHAVIORAL_FINGERPRINT`
+
+Warning-only types:
+
+- `DORMANT_UTXOS`
+- `DIRECT_TAINT`
+
+Severity values are uppercase strings (for example: `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`).
+
 ## Running the application in dev mode
 
 You can run your application in dev mode that enables live coding using:

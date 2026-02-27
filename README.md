@@ -1,48 +1,40 @@
 # Stealth
 
-A privacy audit tool for Bitcoin wallets. Stealth analyzes the transaction history of a wallet descriptor and surfaces privacy vulnerabilities at the UTXO level.
+A privacy audit tool for Bitcoin wallets. Stealth analyzes the transaction history of a wallet descriptor and surfaces privacy findings from real on-chain heuristics.
 
 ## What it does
 
-Paste a Bitcoin wallet descriptor into the input screen and click **Analyze**. Stealth fetches the on-chain history for all addresses derived from that descriptor, then produces a report listing every UTXO in the wallet and the privacy flaws associated with each one.
+Paste a Bitcoin wallet descriptor into the input screen and click **Analyze**. Stealth derives addresses from the descriptor, scans wallet-related chain history, and returns a report with structured `findings` and `warnings`.
 
-## Vulnerabilities detected
+## Detection taxonomy (ground truth)
 
-### Address Reuse
-Detects when the same address has received more than one payment. Address reuse links multiple transactions to a single entity and permanently exposes the full balance history of that address to anyone inspecting the chain.
+Stealth's source-of-truth detector is [`backend/script/detect.py`](backend/script/detect.py). The frontend renders the `type` values emitted by that script.
 
-### CIOH (Common Input Ownership Heuristic)
-Detects transactions where inputs from multiple of your addresses were co-signed. This is the foundational clustering heuristic used by chain-analysis firms: it proves all co-signed inputs belong to the same wallet.
+### Finding types
 
-### Dust Attack
-Identifies UTXOs that originated from dust — tiny amounts sent by a third party to track a wallet. When the user later spends that dust alongside their own coins, the inputs are merged and previously unconnected addresses are linked.
+| Type | Meaning |
+|---|---|
+| `ADDRESS_REUSE` | Address received funds in multiple transactions, linking history and balances. |
+| `CIOH` | Multi-input linkage (Common Input Ownership Heuristic) across co-spent inputs. |
+| `DUST` | Dust output detection (current or historical). |
+| `DUST_SPENDING` | Dust input spent with normal inputs, actively linking clusters. |
+| `CHANGE_DETECTION` | Change output appears trivially identifiable through heuristics. |
+| `CONSOLIDATION` | UTXO created from many-input consolidation transaction. |
+| `SCRIPT_TYPE_MIXING` | Mixed input script families in one spend (strong fingerprint). |
+| `CLUSTER_MERGE` | Inputs from previously separate funding chains merged in one tx. |
+| `UTXO_AGE_SPREAD` | Large age spread across UTXOs reveals dormancy/lookback patterns. |
+| `EXCHANGE_ORIGIN` | Probable exchange batch-withdrawal origin. |
+| `TAINTED_UTXO_MERGE` | Tainted and clean inputs merged, propagating taint. |
+| `BEHAVIORAL_FINGERPRINT` | Consistent transaction behavior reveals wallet/user fingerprint. |
 
-### Dust Spending
-Flags transactions that spend a dust UTXO together with normal-sized inputs, actively triggering the dust-tracking link.
+### Warning-only types
 
-### Change Output Detection
-Detects transactions where the change output is trivially identifiable through heuristics such as round-number payments, mismatched script types between change and payment, or use of the internal (BIP-44 `/1/*`) derivation path.
+| Type | Meaning |
+|---|---|
+| `DORMANT_UTXOS` | Dormant/aged UTXO pattern warning. |
+| `DIRECT_TAINT` | Direct receipt from a known risky source. |
 
-### UTXO Consolidation
-Flags UTXOs born from a consolidation transaction (many inputs, few outputs). Consolidation merges the histories of all input addresses into one UTXO, amplifying the privacy damage of every prior vulnerability.
-
-### Script Type Mixing
-Detects transactions that mix different input script types (e.g. P2PKH alongside P2WPKH). This is rare and highly identifying, shrinking the anonymity set significantly.
-
-### Cluster Merge
-Identifies transactions that merge UTXOs from different funding chains, linking independent coin histories and allowing chain-analysis firms to associate previously separate clusters.
-
-### UTXO Age Spread
-Flags wallets where unspent outputs have significantly different ages. A wide age spread can reveal hoarding patterns and help correlate activity across time periods.
-
-### Exchange Origin
-Detects UTXOs received from likely exchange batch withdrawals, identified by high output counts, many unique recipients, and a large input-to-output ratio.
-
-### Tainted UTXO Merge
-Flags transactions that spend tainted inputs (from known risky sources) alongside clean inputs, spreading taint to the clean coin history.
-
-### Behavioral Fingerprint
-Analyses patterns across all send transactions — fee rates, output counts, RBF signalling, locktime usage, round amounts, and script type consistency — to detect wallet software fingerprints that chain-analysis firms use for clustering.
+`severity` values are emitted as uppercase strings (for example `LOW`, `MEDIUM`, `HIGH`, and `CRITICAL`).
 
 ## How to use
 
@@ -51,8 +43,8 @@ Analyses patterns across all send transactions — fee rates, output counts, RBF
    - Supported formats: `wpkh(...)`, `pkh(...)`, `sh(wpkh(...))`, `tr(...)`, and multisig variants.
 3. Click **Analyze**.
 4. Review the results:
-   - A list of all UTXOs currently held by the wallet.
-   - For each UTXO, the privacy vulnerabilities detected in its history are highlighted.
+   - Summary counters for findings, warnings, and transactions analyzed.
+   - Collapsible finding/warning cards with type, severity, description, and structured evidence.
 
 ## Installation
 
@@ -87,7 +79,7 @@ Pass `--fresh` to wipe the chain and start from genesis.
 python3 reproduce.py
 ```
 
-This script sends transactions between the test wallets to reproduce all 12 privacy vulnerability types — address reuse, dust attacks, CIOH, consolidation, script-type mixing, and more. **The application will return no findings without this step**, since a freshly mined chain has no transaction history to analyse.
+This script sends transactions between the test wallets to reproduce all 12 detector finding types. **The application will return no findings without this step**, since a freshly mined chain has no transaction history to analyze.
 
 After it runs, get a descriptor to paste into the app:
 
@@ -121,7 +113,9 @@ Open `http://localhost:5173` in your browser.
 
 1. Paste a wallet descriptor into the input field (e.g. `wpkh([fp/84h/0h/0h]xpub.../0/*)`).
 2. Click **Analyze** — the frontend calls `GET /api/wallet/scan?descriptor=…` on the backend, which runs `detect.py` against your local regtest node.
-3. Review the findings: each entry shows the vulnerability type, severity, and a collapsible details panel.
+3. Review the report:
+   - `findings[]` and `warnings[]` entries each include `type`, `severity`, `description`, and optional `details`.
+   - The summary panel shows `findings`, `warnings`, and whether the scan is `clean`.
 
 ## Project structure
 

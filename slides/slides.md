@@ -61,9 +61,9 @@ A privacy audit tool that surfaces vulnerabilities at the UTXO level.
 - Supports `wpkh`, `pkh`, `sh(wpkh)`, `tr`, multisig
 
 **Output**
-- Every UTXO listed
-- Privacy flaws per UTXO
-- Severity badges (high / medium / low)
+- Structured findings + warnings
+- Type/severity/description + evidence details
+- Severity badges mapped from detector output
 
 </div>
 
@@ -84,12 +84,19 @@ wpkh([xpub...]/0/*) → Analyze
 
 # Vulnerabilities Detected
 
-| Vulnerability | What it means |
-|---------------|---------------|
-| **Address Reuse** | Same address received >1 payment — links tx history, exposes balance |
-| **Dust Spend** | UTXO from dust attack — when spent, links previously unconnected addresses |
-| **UTXO Consolidation** | Multiple inputs merged — strong signal all belong to same wallet |
-| **CIOH** | Common Input Ownership Heuristic — chain analysis firms use this to cluster addresses |
+| Detector Type | Meaning |
+|---------------|---------|
+| `ADDRESS_REUSE` | Same address received multiple payments, linking history |
+| `CIOH` | Multi-input ownership clustering signal |
+| `DUST` / `DUST_SPENDING` | Dust detection and dust+normal co-spend linkage |
+| `CHANGE_DETECTION` | Payment/change outputs become easy to distinguish |
+| `CONSOLIDATION` / `CLUSTER_MERGE` | Input histories merged into one cluster |
+| `SCRIPT_TYPE_MIXING` | Mixed input script families create fingerprint |
+| `UTXO_AGE_SPREAD` | Old/new UTXO spread leaks dormancy patterns |
+| `EXCHANGE_ORIGIN` | Probable exchange batch-withdrawal origin |
+| `TAINTED_UTXO_MERGE` | Tainted + clean input merge propagates taint |
+| `BEHAVIORAL_FINGERPRINT` | Transaction style consistency re-identifies wallet |
+| Warnings: `DORMANT_UTXOS`, `DIRECT_TAINT` | Non-finding risk signals shown separately |
 
 ---
 
@@ -142,8 +149,8 @@ stealth/
 
 1. **Input screen** — paste descriptor, click Analyze
 2. **Loading** — fetches and analyzes
-3. **Report** — summary bar (total / vulnerable / clean) + UTXO cards
-4. Each card: address, amount, badges, expandable details
+3. **Report** — summary bar (findings / warnings / tx analyzed)
+4. Expandable finding cards: type, severity, description, structured evidence
 
 ---
 
