@@ -1,19 +1,54 @@
 """
 bitcoin_rpc.py — Thin wrapper around bitcoin-cli for Python tests.
-Uses subprocess calls to bitcoin-cli -regtest.
+Connection settings are read from config.ini in the same directory.
 """
 
 import json
 import subprocess
 import time
 import os
+import configparser
 
-CLI = "bitcoin-cli"
-SIGNET_ARGS = [CLI, "-regtest"]
+# ── Load config ──────────────────────────────────────────────────────────────
+
+def _load_config():
+    cfg = configparser.ConfigParser()
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.ini")
+    cfg.read(config_path)
+    return cfg["bitcoin"] if "bitcoin" in cfg else {}
+
+def _build_base_args(section):
+    cli_bin = section.get("cli", "bitcoin-cli")
+    network = section.get("network", "regtest").strip().lower()
+
+    args = [cli_bin]
+
+    network_flags = {
+        "regtest": "-regtest",
+        "testnet": "-testnet",
+        "signet":  "-signet",
+    }
+    if network in network_flags:
+        args.append(network_flags[network])
+
+    for key, flag in [("rpchost", "-rpcconnect"), ("rpcport", "-rpcport"),
+                      ("rpcuser", "-rpcuser"), ("rpcpassword", "-rpcpassword")]:
+        value = section.get(key, "").strip()
+        if value:
+            args.append(f"{flag}={value}")
+
+    return args
+
+_cfg = _load_config()
+_BASE_ARGS = _build_base_args(_cfg)
+
+# Keep these for any scripts that might reference them directly
+CLI = _cfg.get("cli", "bitcoin-cli")
+SIGNET_ARGS = _BASE_ARGS
 
 def cli(*args, wallet=None):
-    """Call bitcoin-cli -regtest [wallet] <args> and return parsed JSON or string."""
-    cmd = list(SIGNET_ARGS)
+    """Call bitcoin-cli [network] [wallet] <args> and return parsed JSON or string."""
+    cmd = list(_BASE_ARGS)
     if wallet:
         cmd.append(f"-rpcwallet={wallet}")
     cmd.extend(str(a) for a in args)

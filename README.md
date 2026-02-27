@@ -64,7 +64,26 @@ git clone https://github.com/LORDBABUINO/stealth.git
 cd stealth
 ```
 
-### 2. Bootstrap Bitcoin Core (regtest)
+### 2. Configure the blockchain connection
+
+Edit `backend/script/config.ini` to match your node:
+
+```ini
+[bitcoin]
+# Network: regtest | testnet | signet | mainnet
+network = regtest
+
+# Path to bitcoin-cli (full path if not on PATH)
+cli = bitcoin-cli
+
+# Optional RPC overrides (leave blank to use ~/.bitcoin/bitcoin.conf defaults)
+rpchost =
+rpcport =
+rpcuser =
+rpcpassword =
+```
+
+### 3. Bootstrap Bitcoin Core (regtest)
 
 ```bash
 cd backend/script
@@ -73,7 +92,7 @@ cd backend/script
 
 Pass `--fresh` to wipe the chain and start from genesis.
 
-### 3. Generate vulnerable transactions (required before using the app)
+### 4. Generate vulnerable transactions (required before using the app)
 
 ```bash
 python3 reproduce.py
@@ -90,7 +109,7 @@ bitcoin-cli -regtest -rpcwallet=alice listdescriptors | python3 -c \
 
 Copy the output and use it as the descriptor in the application.
 
-### 4. Start the backend
+### 5. Start the backend
 
 ```bash
 cd backend/src/StealthBackend
@@ -99,7 +118,7 @@ cd backend/src/StealthBackend
 
 The API will be available at `http://localhost:8080`.
 
-### 5. Start the frontend
+### 6. Start the frontend
 
 ```bash
 cd frontend
@@ -123,7 +142,7 @@ Open `http://localhost:5173` in your browser.
 stealth/
 ├── frontend/          # React + Vite UI
 ├── backend/
-│   ├── script/        # detect.py, reproduce.py, setup.sh, bitcoin_rpc.py
+│   ├── script/        # detect.py, reproduce.py, setup.sh, bitcoin_rpc.py, config.ini
 │   └── src/           # Quarkus Java REST API
 └── slides/            # Slidev pitch presentation
 ```
