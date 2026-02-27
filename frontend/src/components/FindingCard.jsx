@@ -117,6 +117,16 @@ function DetailsPanel({ details }) {
   return <div className={styles.details}>{parts}</div>
 }
 
+function CorrectionPanel({ text }) {
+  if (!text) return null
+  return (
+    <div className={styles.correction}>
+      <div className={styles.correctionLabel}>How to fix</div>
+      <p className={styles.correctionText}>{text}</p>
+    </div>
+  )
+}
+
 export default function FindingCard({ finding }) {
   const [open, setOpen] = useState(false)
 
@@ -129,7 +139,12 @@ export default function FindingCard({ finding }) {
         </div>
         <span className={`${styles.chevron} ${open ? styles.open : ''}`}>›</span>
       </button>
-      {open && <DetailsPanel details={finding.details} />}
+      {open && (
+        <>
+          <DetailsPanel details={finding.details} />
+          <CorrectionPanel text={finding.correction} />
+        </>
+      )}
     </div>
   )
 }
