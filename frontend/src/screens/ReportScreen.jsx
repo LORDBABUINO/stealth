@@ -1,4 +1,4 @@
-import UtxoCard from '../components/UtxoCard'
+import FindingCard from '../components/FindingCard'
 import styles from './ReportScreen.module.css'
 
 function truncateDescriptor(desc) {
@@ -7,7 +7,7 @@ function truncateDescriptor(desc) {
 }
 
 export default function ReportScreen({ report, descriptor, onReset }) {
-  const { summary, utxos } = report
+  const { stats, findings, warnings, summary } = report
 
   return (
     <div className={styles.root}>
@@ -33,29 +33,54 @@ export default function ReportScreen({ report, descriptor, onReset }) {
 
         {/* Summary bar */}
         <div className={styles.summaryBar}>
-          <div className={`${styles.summaryCard} ${styles.total}`}>
-            <div className={styles.summaryNumber}>{summary.total}</div>
-            <div className={styles.summaryLabel}>Total UTXOs</div>
-          </div>
           <div className={`${styles.summaryCard} ${styles.vulnerable}`}>
-            <div className={styles.summaryNumber}>{summary.vulnerable}</div>
-            <div className={styles.summaryLabel}>Vulnerable</div>
+            <div className={styles.summaryNumber}>{summary.findings}</div>
+            <div className={styles.summaryLabel}>Findings</div>
           </div>
-          <div className={`${styles.summaryCard} ${styles.clean}`}>
-            <div className={styles.summaryNumber}>{summary.clean}</div>
-            <div className={styles.summaryLabel}>Clean</div>
+          <div className={`${styles.summaryCard} ${styles.warn}`}>
+            <div className={styles.summaryNumber}>{summary.warnings}</div>
+            <div className={styles.summaryLabel}>Warnings</div>
+          </div>
+          <div className={`${styles.summaryCard} ${styles.total}`}>
+            <div className={styles.summaryNumber}>{stats.transactions_analyzed}</div>
+            <div className={styles.summaryLabel}>Txs Analyzed</div>
           </div>
         </div>
 
-        {/* UTXO list */}
-        <div className={styles.listHeader}>
-          <span className={styles.listTitle}>UTXO Analysis</span>
-        </div>
-        <div className={styles.utxoList}>
-          {utxos.map((utxo) => (
-            <UtxoCard key={`${utxo.txid}:${utxo.vout}`} utxo={utxo} />
-          ))}
-        </div>
+        {/* Clean banner */}
+        {summary.clean && (
+          <div className={styles.cleanBanner}>
+            No privacy issues found — this wallet has a clean history.
+          </div>
+        )}
+
+        {/* Findings */}
+        {findings.length > 0 && (
+          <>
+            <div className={styles.listHeader}>
+              <span className={styles.listTitle}>Findings</span>
+            </div>
+            <div className={styles.findingList}>
+              {findings.map((f, i) => (
+                <FindingCard key={i} finding={f} />
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Warnings */}
+        {warnings.length > 0 && (
+          <>
+            <div className={styles.listHeader} style={{ marginTop: 28 }}>
+              <span className={styles.listTitle}>Warnings</span>
+            </div>
+            <div className={styles.findingList}>
+              {warnings.map((w, i) => (
+                <FindingCard key={i} finding={w} />
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

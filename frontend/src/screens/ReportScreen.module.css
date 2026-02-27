@@ -129,7 +129,26 @@
   border-color: rgba(0, 212, 170, 0.25);
 }
 
-/* UTXO list */
+.warn .summaryNumber {
+  color: var(--warning);
+}
+
+.warn {
+  border-color: rgba(244, 162, 97, 0.25);
+}
+
+/* Clean banner */
+.cleanBanner {
+  background: var(--accent-dim);
+  border: 1px solid rgba(0, 212, 170, 0.3);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  font-size: 13px;
+  color: var(--accent);
+  margin-bottom: 28px;
+}
+
+/* Finding list */
 .listHeader {
   display: flex;
   align-items: center;
@@ -145,8 +164,8 @@
   color: var(--text-muted);
 }
 
-.utxoList {
+.findingList {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
