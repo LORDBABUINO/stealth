@@ -1,0 +1,1 @@
+code ~/.bitcoin/bitcoin.conf
