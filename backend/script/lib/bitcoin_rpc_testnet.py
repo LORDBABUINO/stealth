@@ -1,52 +1,23 @@
 """
-bitcoin_rpc.py — Facade that selects regtest or testnet backend
-based on config.ini [bitcoin] network setting.
-
-Exposes:
-    NETWORK       – "regtest" or "testnet"
-    IS_REGTEST    – True when running on regtest
-    cli(...)      – RPC call routed to the correct backend
-    mine_blocks, get_tx, get_utxos, get_balance, send_raw, ...
+bitcoin_rpc.py — Thin wrapper around bitcoin-cli for Python tests.
+Connection settings are read from config.ini in the same directory.
 """
 
 import json
+import subprocess
 import time
 import os
-import configparser
+import requests
+from lib.clis import cli_testnet
 
-# ── Load config ──────────────────────────────────────────────────────────────
-
-def _load_config():
-    cfg = configparser.ConfigParser()
-    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.ini")
-    cfg.read(config_path)
-    return cfg["bitcoin"] if "bitcoin" in cfg else {}
-
-_cfg = _load_config()
-NETWORK = _cfg.get("network", "regtest").strip().lower()
-IS_REGTEST = NETWORK == "regtest"
-
-# ── Select the right cli backend ─────────────────────────────────────────────
-
-if IS_REGTEST:
-    from lib.clis import cli_regtest as _cli_backend
-else:
-    from lib.clis import cli_testnet as _cli_backend
 
 
 def cli(*args, wallet=None):
-    """Route RPC calls to the active backend."""
-    return _cli_backend(*args, wallet=wallet)
-
-
-# ── Block mining (regtest only) ──────────────────────────────────────────────
+    return cli_testnet(*args, wallet=wallet)
+    # return cli_regtest(*args, wallet=wallet)
 
 def mine_blocks(n=1):
-    """Mine n blocks. Only works on regtest; no-op on testnet."""
-    if not IS_REGTEST:
-        # On testnet we cannot mine — just wait for propagation
-        time.sleep(2)
-        return get_block_count()
+    """Mine n blocks on regtest using generatetoaddress."""
     miner_addr = cli("getnewaddress", "", "bech32", wallet="miner")
     cli("generatetoaddress", n, miner_addr)
     return int(cli("getblockcount"))
@@ -139,12 +110,10 @@ def get_new_address(wallet_name, addr_type="bech32"):
 
 def send_to_address(wallet_name, address, amount):
     """Send BTC to an address."""
-    print(f"Sending {amount:.8f} BTC from {wallet_name} to {address}...")
     return cli("sendtoaddress", address, f"{amount:.8f}", wallet=wallet_name)
 
 
 if __name__ == "__main__":
-    print(f"Network mode: {NETWORK} (IS_REGTEST={IS_REGTEST})")
     print("Testing RPC connection...")
     info = cli("getblockchaininfo")
     print(f"  Chain: {info['chain']}")
