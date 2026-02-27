@@ -77,13 +77,25 @@ def resolve_descriptors(args):
                 "range_end": d.get("range", [0, 999])[1] if isinstance(d.get("range"), list) else d.get("range", 999),
             })
     else:
-        for d in args.descriptors:
-            descs.append({
-                "desc": d,
-                "internal": "/1/*" in d,
-                "active": True,
-                "range_end": 999,
-            })
+        for raw in args.descriptors:
+            base = raw.split("#")[0]
+            if "/0/*" in base:
+                candidates = [(base, False), (base.replace("/0/*", "/1/*"), True)]
+            elif "/1/*" in base:
+                candidates = [(base.replace("/1/*", "/0/*"), False), (base, True)]
+            else:
+                candidates = [(base, False)]
+            for desc, internal in candidates:
+                try:
+                    normalized = cli("getdescriptorinfo", desc)["descriptor"]
+                except Exception:
+                    normalized = desc
+                descs.append({
+                    "desc": normalized,
+                    "internal": internal,
+                    "active": True,
+                    "range_end": 999,
+                })
     return descs
 
 
