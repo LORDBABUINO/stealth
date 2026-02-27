@@ -107,69 +107,6 @@ Common wallet patterns that leak privacy:
 
 ---
 
-## What Stealth Does
-
-<div class="split two">
-
-<div class="panel">
-
-<p class="kicker">Input</p>
-<ul class="list">
-  <li>Paste a wallet descriptor</li>
-
-</ul>
-
-<p class="kicker mt">Output</p>
-<ul class="list">
-  <li>Structured findings plus warnings</li>
-  <li>Type, severity, description, and evidence</li>
-  <li>Severity badges mapped directly from detectors</li>
-</ul>
-
-</div>
-
-<div class="panel code-panel">
-
-```bash
-# one click
-wpkh([xpub...]/0/*) -> Analyze
-```
-
-<p class="result-arrow">=> Full report with actionable, spend-aware insights</p>
-
-</div>
-
-</div>
-
----
-
-## Vulnerabilities Detected
-<br>
-<table class="detector-table">
-  <thead>
-    <tr>
-      <th>Detector Type</th>
-      <th>Meaning</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr><td><code>ADDRESS_REUSE</code></td><td>Repeated receive address links payment history</td></tr>
-    <tr><td><code>CIOH</code></td><td>Multi-input ownership clustering signal</td></tr>
-    <tr><td><code>DUST</code> / <code>DUST_SPENDING</code></td><td>Dust + normal co-spend linkage pattern</td></tr>
-    <tr><td><code>CHANGE_DETECTION</code></td><td>Payment and change outputs become distinguishable</td></tr>
-    <tr><td><code>CONSOLIDATION</code> / <code>CLUSTER_MERGE</code></td><td>Input histories merged into one traceable cluster</td></tr>
-    <tr><td><code>SCRIPT_TYPE_MIXING</code></td><td>Mixed script families create a wallet fingerprint</td></tr>
-    <tr><td><code>UTXO_AGE_SPREAD</code></td><td>Old/new spread leaks dormancy behavior</td></tr>
-    <tr><td><code>EXCHANGE_ORIGIN</code></td><td>Probable exchange withdrawal origin signature</td></tr>
-    <tr><td><code>TAINTED_UTXO_MERGE</code></td><td>Tainted + clean merge propagates contamination</td></tr>
-    <tr><td><code>BEHAVIORAL_FINGERPRINT</code></td><td>Consistent transaction style re-identifies wallet</td></tr>
-  </tbody>
-</table>
-
-<p class="footnote">Warnings: <code>DORMANT_UTXOS</code> and <code>DIRECT_TAINT</code> are shown as contextual risk signals.</p>
-
----
-
 ## How It Works
 <br>
 <div class="split three">
@@ -211,19 +148,6 @@ wpkh([xpub...]/0/*) -> Analyze
 
 ---
 
-## Demo Flow
-
-<div class="panel">
-  <ol class="flow">
-    <li><span>Input</span> Paste descriptor and trigger analysis</li>
-    <li><span>Load</span> Fetch + parse + detect in one pipeline</li>
-    <li><span>Report</span> Summary bar: findings / warnings / transactions</li>
-    <li><span>Inspect</span> Expand finding cards for severity and evidence payloads</li>
-  </ol>
-</div>
-
----
-
 ## Demo
 
 <div class="panel">
@@ -238,6 +162,33 @@ wpkh([xpub...]/0/*) -> Analyze
   ></video>
   <p class="footnote">2x playback and compressed for lightweight deck rendering.</p>
 </div>
+
+---
+
+## Vulnerabilities Detected
+<br>
+<table class="detector-table">
+  <thead>
+    <tr>
+      <th>Detector Type</th>
+      <th>Meaning</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td><code>ADDRESS_REUSE</code></td><td>Repeated receive address links payment history</td></tr>
+    <tr><td><code>CIOH</code></td><td>Multi-input ownership clustering signal</td></tr>
+    <tr><td><code>DUST</code> / <code>DUST_SPENDING</code></td><td>Dust + normal co-spend linkage pattern</td></tr>
+    <tr><td><code>CHANGE_DETECTION</code></td><td>Payment and change outputs become distinguishable</td></tr>
+    <tr><td><code>CONSOLIDATION</code> / <code>CLUSTER_MERGE</code></td><td>Input histories merged into one traceable cluster</td></tr>
+    <tr><td><code>SCRIPT_TYPE_MIXING</code></td><td>Mixed script families create a wallet fingerprint</td></tr>
+    <tr><td><code>UTXO_AGE_SPREAD</code></td><td>Old/new spread leaks dormancy behavior</td></tr>
+    <tr><td><code>EXCHANGE_ORIGIN</code></td><td>Probable exchange withdrawal origin signature</td></tr>
+    <tr><td><code>TAINTED_UTXO_MERGE</code></td><td>Tainted + clean merge propagates contamination</td></tr>
+    <tr><td><code>BEHAVIORAL_FINGERPRINT</code></td><td>Consistent transaction style re-identifies wallet</td></tr>
+  </tbody>
+</table>
+
+<p class="footnote">Warnings: <code>DORMANT_UTXOS</code> and <code>DIRECT_TAINT</code> are shown as contextual risk signals.</p>
 
 ---
 
