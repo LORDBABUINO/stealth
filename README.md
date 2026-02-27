@@ -35,7 +35,8 @@ Detects UTXOs that were created by, or whose history involves, transactions wher
 ```
 stealth/
 ├── frontend/   # User interface
-└── backend/    # Descriptor parsing, chain data fetching, and analysis engine
+├── backend/    # Descriptor parsing, chain data fetching, and analysis engine
+└── slides/     # Slidev pitch presentation
 ```
 
 ## Privacy notice

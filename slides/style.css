@@ -1,0 +1,84 @@
+/* Stealth theme overrides — matches frontend App.css */
+:root {
+  --slidev-theme-primary: #00d4aa;
+  --slidev-theme-accent: #00d4aa;
+  --stealth-bg: #080c14;
+  --stealth-surface: #0f1623;
+  --stealth-surface-2: #162030;
+  --stealth-border: #1e2d45;
+  --stealth-accent: #00d4aa;
+  --stealth-danger: #ff4d6d;
+  --stealth-warning: #f4a261;
+  --stealth-safe: #2ec4b6;
+  --stealth-text: #e8edf5;
+  --stealth-text-muted: #6b7a99;
+}
+
+.slidev-layout {
+  background-color: var(--stealth-bg) !important;
+  color: var(--stealth-text) !important;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+}
+
+.slidev-layout h1,
+.slidev-layout h2,
+.slidev-layout h3 {
+  color: var(--stealth-text) !important;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.slidev-layout h1 {
+  font-size: 2.5rem !important;
+}
+
+.slidev-layout h1 .accent {
+  color: var(--stealth-accent) !important;
+}
+
+.slidev-layout p,
+.slidev-layout li {
+  color: var(--stealth-text-muted) !important;
+}
+
+.slidev-layout a {
+  color: var(--stealth-accent) !important;
+}
+
+.slidev-layout code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
+  background: var(--stealth-surface) !important;
+  color: var(--stealth-accent) !important;
+  border: 1px solid var(--stealth-border) !important;
+  border-radius: 6px !important;
+}
+
+.slidev-layout .badge-danger {
+  background: rgba(255, 77, 109, 0.15);
+  color: var(--stealth-danger);
+  border: 1px solid rgba(255, 77, 109, 0.3);
+}
+
+.slidev-layout .badge-warning {
+  background: rgba(244, 162, 97, 0.15);
+  color: var(--stealth-warning);
+  border: 1px solid rgba(244, 162, 97, 0.3);
+}
+
+.slidev-layout .badge-safe {
+  background: rgba(46, 196, 182, 0.15);
+  color: var(--stealth-safe);
+  border: 1px solid rgba(46, 196, 182, 0.3);
+}
+
+.slidev-layout .card {
+  background: var(--stealth-surface) !important;
+  border: 1px solid var(--stealth-border) !important;
+  border-radius: 12px !important;
+}
+
+.slidev-layout .btn-primary {
+  background: var(--stealth-accent) !important;
+  color: #080c14 !important;
+  font-weight: 700 !important;
+}
