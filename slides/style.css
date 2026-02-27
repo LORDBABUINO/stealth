@@ -317,3 +317,16 @@ code {
 .seesaw-balanced .seesaw-side.light {
   transform: translateY(0) rotate(0deg);
 }
+
+/* PDF/export stability: avoid transparent gradient compositing artifacts */
+@media print {
+  .slidev-layout {
+    background: var(--bg) !important;
+  }
+
+  .panel,
+  .hero-wrap {
+    background: var(--surface) !important;
+    box-shadow: none !important;
+  }
+}
