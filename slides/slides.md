@@ -116,8 +116,8 @@ Common wallet patterns that leak privacy:
 <p class="step-index">01</p>
 <h3>Parse</h3>
 <ul class="list">
-  <li>Extract addresses from descriptor</li>
-  <li>Normalize all common formats</li>
+  <li>Input public descriptor</li>
+  <li>Get all addresses and UTXOs</li>
 </ul>
 
 </div>
@@ -128,7 +128,7 @@ Common wallet patterns that leak privacy:
 <h3>Fetch</h3>
 <ul class="list">
   <li>Load on-chain history per address</li>
-  <li>Use Bitcoin node or indexed API source</li>
+  <li>Use Bitcoin node</li>
 </ul>
 
 </div>
@@ -138,8 +138,8 @@ Common wallet patterns that leak privacy:
 <p class="step-index">03</p>
 <h3>Analyze</h3>
 <ul class="list">
-  <li>Apply privacy heuristics and warnings</li>
-  <li>Flag each UTXO with findings and evidence</li>
+  <li>Use privacy heuristics</li>
+  <li>Flag each UTXO with findings and suggestions</li>
 </ul>
 
 </div>
