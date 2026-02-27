@@ -151,6 +151,31 @@
   color: var(--text-muted);
 }
 
+/* Correction panel */
+.correction {
+  border-top: 1px solid var(--border);
+  padding: 14px 16px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.correctionLabel {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
+
+.correctionText {
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.6;
+  margin: 0;
+}
+
 /* Key-value */
 .kvList {
   display: flex;

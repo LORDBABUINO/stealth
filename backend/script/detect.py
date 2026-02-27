@@ -295,6 +295,12 @@ def detect_01_address_reuse(g: TxGraph):
                 "tx_count": len(txids),
                 "txids": tx_list,
             },
+            "correction": (
+                "Generate a fresh address for every payment received. "
+                "Enable HD wallet derivation (BIP-32/44/84) so your wallet produces a new address automatically. "
+                "If the address is a static donation or payment address, consider a Lightning invoice or a "
+                "payment-code scheme (BIP-47) that hides the on-chain address."
+            ),
         })
 
 
@@ -346,6 +352,12 @@ def detect_02_cioh(g: TxGraph):
                     for ia in our_inputs
                 ],
             },
+            "correction": (
+                "Use coin control to select only one UTXO per transaction when the payment amount allows it. "
+                "If consolidation is unavoidable, do it privately via a CoinJoin round so the link between "
+                "inputs is indistinguishable from other participants. "
+                "Alternatively, use the Lightning Network for small payments to avoid creating on-chain multi-input transactions."
+            ),
         })
 
     if not found_any:
@@ -393,6 +405,12 @@ def detect_03_dust(g: TxGraph):
                     "txid": u["txid"],
                     "vout": u["vout"],
                 },
+                "correction": (
+                    "Do not spend this dust output — doing so links your other inputs to this address via CIOH. "
+                    "Use your wallet's coin freeze / UTXO management feature to exclude it from future transactions. "
+                    "If the wallet does not support freezing, consider processing it through a CoinJoin round "
+                    "so the tracking token is obfuscated before it touches any of your real UTXOs."
+                ),
             })
 
     # Deduplicate historical
@@ -418,6 +436,11 @@ def detect_03_dust(g: TxGraph):
                         "sats": h["sats"],
                         "txid": h["txid"],
                     },
+                    "correction": (
+                        "This dust has already been spent, so the tracking link is already on-chain. "
+                        "Going forward, reject unsolicited dust by enabling automatic dust rejection in your wallet, "
+                        "or use wallet software that warns before spending dust-class UTXOs."
+                    ),
                 })
 
 
@@ -454,6 +477,13 @@ def detect_04_dust_spending(g: TxGraph):
                     "dust_inputs": [{"address": d["address"], "sats": int(round(d["value"] * 1e8))} for d in dust_inputs],
                     "normal_inputs": [{"address": n["address"], "amount_btc": round(n["value"], 8)} for n in normal_inputs],
                 },
+                "correction": (
+                    "Freeze dust UTXOs in your wallet to prevent them from being automatically selected as inputs. "
+                    "Never manually include a dust UTXO in a transaction that also spends normal UTXOs, "
+                    "as this permanently links those addresses. "
+                    "If the dust must be reclaimed, do so in isolation via a dedicated CoinJoin or by sweeping only "
+                    "the dust in a separate, low-value transaction with no other inputs."
+                ),
             })
 
     if not found_any:
@@ -525,6 +555,12 @@ def detect_05_change_detection(g: TxGraph):
                     "reasons": problems[:6],
                     "change_outputs": [{"address": co["address"], "amount_btc": round(co["value"], 8)} for co in our_outs],
                 },
+                "correction": (
+                    "Use PayJoin (BIP-78) so the receiver also contributes an input, breaking the payment/change heuristic. "
+                    "Alternatively, select a UTXO that exactly covers the payment amount (no change output needed). "
+                    "Ensure your change address uses the same script type as the payment address. "
+                    "Avoid sending round amounts so the change amount is not the obvious 'leftover'."
+                ),
             })
 
     if not found_any:
@@ -562,6 +598,13 @@ def detect_06_consolidation_origin(g: TxGraph):
                     "consolidation_outputs": n_out,
                     "our_inputs_in_consolidation": len(our_parent_in),
                 },
+                "correction": (
+                    "Avoid consolidating many UTXOs into one in a single transaction, as it permanently links all "
+                    "those addresses under CIOH. If fee savings require consolidation, do it during a period of low "
+                    "fees and through a CoinJoin (e.g., Whirlpool or JoinMarket) so the link between inputs is "
+                    "indistinguishable from other participants. "
+                    "Consider keeping UTXOs separate and using coin selection strategies that minimize on-chain footprint."
+                ),
             })
 
     if not found_any:
@@ -601,6 +644,13 @@ def detect_07_script_type_mixing(g: TxGraph):
                         for ia in input_addrs
                     ],
                 },
+                "correction": (
+                    "Migrate all funds to a single address type — preferably Taproot (P2TR / bc1p) which offers the "
+                    "largest anonymity set going forward. "
+                    "Never mix P2PKH, P2SH-P2WPKH, P2WPKH, and P2TR inputs in the same transaction; each type "
+                    "combination is a rare fingerprint. "
+                    "Sweep legacy-type UTXOs to a fresh Taproot wallet through a CoinJoin to avoid the cross-type link."
+                ),
             })
 
     if not found_any:
@@ -655,6 +705,13 @@ def detect_08_cluster_merge(g: TxGraph):
                         "txid": txid,
                         "funding_sources": {k: sorted(v) for k, v in funding_sources.items()},
                     },
+                    "correction": (
+                        "Use coin control to spend UTXOs from only one funding source per transaction. "
+                        "Keep UTXOs received from different counterparties in separate wallets or accounts "
+                        "so they are never accidentally merged. "
+                        "If you must merge UTXOs from different origins, pass them through a CoinJoin first "
+                        "to break the chain-analysis link before combining them."
+                    ),
                 })
 
     if not found_any:
@@ -702,6 +759,12 @@ def detect_09_lookback_depth(g: TxGraph):
             "oldest": {"txid": oldest["utxo"]["txid"], "confirmations": oldest["confirmations"], "amount_btc": round(oldest["utxo"]["amount"], 8)},
             "newest": {"txid": newest["utxo"]["txid"], "confirmations": newest["confirmations"], "amount_btc": round(newest["utxo"]["amount"], 8)},
         },
+        "correction": (
+            "Prefer spending older UTXOs first (FIFO coin selection) to normalize the age distribution of your "
+            "UTXO set and avoid leaving very old coins as obvious dormancy markers. "
+            "Alternatively, route very old UTXOs through a CoinJoin to reset their history before spending. "
+            "Avoid holding large numbers of long-dormant coins in the same wallet as freshly received funds."
+        ),
     })
 
     OLD_THRESHOLD = 100  # blocks
@@ -798,6 +861,13 @@ def detect_10_exchange_origin(g: TxGraph, known_exchange_wallets=None):
                     "signals": signals,
                     "received_outputs": [{"address": o["address"], "amount_btc": round(o["value"], 8)} for o in our_outputs],
                 },
+                "correction": (
+                    "Withdraw via Lightning Network instead of on-chain to avoid the exchange-origin fingerprint entirely. "
+                    "If an on-chain withdrawal is required, request it at a non-standard time or amount to reduce "
+                    "correlation with a specific batch. "
+                    "After withdrawal, pass the UTXO through a CoinJoin before using it for other payments, so the "
+                    "exchange link is severed from your subsequent spending history."
+                ),
             })
 
     if not found_any:
@@ -859,6 +929,13 @@ def detect_11_tainted_utxos(g: TxGraph, known_risky_wallets=None):
                     "clean_inputs": [{"address": c["address"], "amount_btc": round(c["value"], 8)} for c in clean],
                     "taint_pct": round(taint_pct),
                 },
+                "correction": (
+                    "Immediately freeze tainted UTXOs in your wallet to prevent them from being spent alongside clean funds. "
+                    "Never merge inputs from known risky sources with unrelated UTXOs — this propagates the taint to all outputs. "
+                    "Seek legal/compliance guidance on whether the tainted funds can be returned or must be reported. "
+                    "If the funds are legitimately yours, process the tainted UTXO separately and consider disclosing "
+                    "its origin to any counterparty that may receive it downstream."
+                ),
             })
 
     # Also check: did we receive directly from a risky source?
@@ -1079,6 +1156,14 @@ def detect_12_behavioral_fingerprint(g: TxGraph):
             "send_tx_count": len(send_txids),
             "patterns": problems,
         },
+        "correction": (
+            "Switch to wallet software that applies anti-fingerprinting defaults: anti-fee-sniping locktime, "
+            "randomized fee rates (not fixed sat/vB), and RBF enabled by default. "
+            "Avoid sending only round amounts — add small random satoshi offsets to payment values. "
+            "Standardize on a single modern script type (Taproot) so your input-type set is not distinctive. "
+            "Use batched payments sparingly and vary the number of outputs per transaction to prevent "
+            "structural fingerprinting from consistent output counts."
+        ),
     })
 
 
