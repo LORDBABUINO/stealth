@@ -116,7 +116,7 @@ Common wallet patterns that leak privacy:
 <p class="kicker">Input</p>
 <ul class="list">
   <li>Paste a wallet descriptor</li>
-  <li>Supports <code>wpkh</code>, <code>pkh</code>, <code>sh(wpkh)</code>, <code>tr</code>, multisig</li>
+
 </ul>
 
 <p class="kicker mt">Output</p>
@@ -211,29 +211,6 @@ wpkh([xpub...]/0/*) -> Analyze
 
 ---
 
-## Architecture
-
-```txt
-stealth/
-|-- frontend/   # React + Vite: input, loading, report
-`-- backend/    # Java/Quarkus: parsing, chain data, analysis
-```
-
-<div class="split two">
-  <div class="panel">
-    <p class="kicker">Security Model</p>
-    <p class="strong">Read-only</p>
-    <p class="muted">No private keys, no descriptor storage, no hidden transmission path.</p>
-  </div>
-  <div class="panel">
-    <p class="kicker">Deployment</p>
-    <p class="strong">Self-hostable</p>
-    <p class="muted">Point to your own node for maximum privacy and deterministic trust.</p>
-  </div>
-</div>
-
----
-
 ## Demo Flow
 
 <div class="panel">
@@ -298,18 +275,3 @@ stealth/
   <p class="hero-copy">Protect privacy before you broadcast intent.</p>
 </div>
 
----
-
-## Appendix — Supported Descriptors
-
-<div class="panel">
-  <ul class="list">
-    <li><code>wpkh(...)</code> — native SegWit</li>
-    <li><code>pkh(...)</code> — legacy</li>
-    <li><code>sh(wpkh(...))</code> — nested SegWit</li>
-    <li><code>tr(...)</code> — Taproot</li>
-    <li>Multisig variants</li>
-  </ul>
-</div>
-
-<p class="footnote">All analysis relies only on publicly available on-chain data.</p>
