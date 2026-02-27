@@ -9,72 +9,133 @@ fonts:
 lineNumbers: false
 drawings:
   persist: false
-transition: slide
+transition: fade
+colorSchema: dark
 mdc: true
 ---
 
-# STEAL<span class="accent">TH</span>
-
-### Bitcoin Wallet Privacy Analyzer
-
-A privacy audit tool that surfaces vulnerabilities at the UTXO level.
+<div class="hero-wrap">
+ 
+  <h1 class="hero-title">STEAL<span class="accent">TH</span></h1>
+  <p class="hero-subtitle">Bitcoin Wallet Privacy Analyzer</p>
+  <p class="hero-copy">A read-only audit engine that surfaces wallet exposure at the UTXO level before funds move.</p>
+  <div class="hero-chips">
+    <span class="chip chip-safe">No keys</span>
+    <span class="chip">UTXO-level findings</span>
+    <span class="chip">Self-hostable</span>
+  </div>
+</div>
 
 ---
 
 # The Problem
-
-<div class="grid grid-cols-2 gap-8">
-
-<div>
-
-**Bitcoin privacy is fragile**
-
-- Chain analysis firms track wallets
-- Common heuristics link addresses
-- Users rarely know their exposure
-- One bad UTXO can taint the rest
-
-</div>
-
-<div>
-
-**Today's tools**
-
-- Complex, require expertise
-- No UTXO-level visibility
-- Hard to understand risk before spending
-
-</div>
-
+<br>
+<div class="panel accent-panel">
+  <p class="kicker">Visibility gap</p>
+  <h3>Bitcoin privacy leaks are invisible to users</h3>
+  <ul class="list">
+    <li>Companies like <b>Chainalysis</b> can analyze wallet privacy</li>
+    <li><b>Users cannot</b></li>
+    <li>People may expose: full transaction history, identity links, and behavioral fingerprints</li>
+  </ul>
+<br>
+<p>Companies can analyze your privacy better than you can.
+</p>
 </div>
 
 ---
 
-# What Stealth Does
+# Why This Happens
+<br>
+<div class="panel accent-panel">
+<h3>Privacy is broken by <b>patterns</b>, not hacks</h3>
 
-<div class="grid grid-cols-2 gap-6">
+Common wallet patterns that leak privacy:
 
-<div>
+- Multi-input transactions (CIOH / consolidation) 
+- Combining coins
+- Address reuse   
+- Sending change to same input address  
+- Dust UTXOs  
+- Exchange linkage / taint signals  
+</div>
 
-**Input**
-- Paste wallet descriptor
-- Supports `wpkh`, `pkh`, `sh(wpkh)`, `tr`, multisig
+---
 
-**Output**
-- Structured findings + warnings
-- Type/severity/description + evidence details
-- Severity badges mapped from detector output
+## Visibility Imbalance
+
+<p class="footnote">Chainalysis users can see wallet-linkage signals that the average user cannot see about themselves.</p>
+
+<div class="seesaw-wrap">
+  <div class="seesaw">
+    <div class="seesaw-beam-bar"></div>
+    <div class="seesaw-beam">
+      <div class="seesaw-side heavy">
+        <span class="chainalysis-wordmark">Chainalysis</span>
+      </div>
+      <div class="seesaw-pivot"></div>
+      <div class="seesaw-side light">
+        <span class="user-label">user</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+---
+
+## Privacy Parity
+
+<p class="footnote">With Stealth, users gain visibility closer to institutional-grade analysis.</p>
+
+<div class="seesaw-wrap">
+  <div class="seesaw seesaw-balanced">
+    <div class="seesaw-beam-bar"></div>
+    <div class="seesaw-beam">
+      <div class="seesaw-side heavy">
+        <span class="chainalysis-wordmark">Chainalysis</span>
+      </div>
+      <div class="seesaw-pivot"></div>
+      <div class="seesaw-side light">
+        <div class="user-stealth-stack">
+          <span class="user-label">user</span>
+          <span class="stealth-wordmark">STEAL<span class="accent">TH</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+---
+
+## What Stealth Does
+
+<div class="split two">
+
+<div class="panel">
+
+<p class="kicker">Input</p>
+<ul class="list">
+  <li>Paste a wallet descriptor</li>
+  <li>Supports <code>wpkh</code>, <code>pkh</code>, <code>sh(wpkh)</code>, <code>tr</code>, multisig</li>
+</ul>
+
+<p class="kicker mt">Output</p>
+<ul class="list">
+  <li>Structured findings plus warnings</li>
+  <li>Type, severity, description, and evidence</li>
+  <li>Severity badges mapped directly from detectors</li>
+</ul>
 
 </div>
 
-<div>
+<div class="panel code-panel">
 
 ```bash
-# One click
-wpkh([xpub...]/0/*) → Analyze
+# one click
+wpkh([xpub...]/0/*) -> Analyze
 ```
 
-→ Full report with actionable insights
+<p class="result-arrow">=> Full report with actionable, spend-aware insights</p>
 
 </div>
 
@@ -82,101 +143,173 @@ wpkh([xpub...]/0/*) → Analyze
 
 ---
 
-# Vulnerabilities Detected
+## Vulnerabilities Detected
+<br>
+<table class="detector-table">
+  <thead>
+    <tr>
+      <th>Detector Type</th>
+      <th>Meaning</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td><code>ADDRESS_REUSE</code></td><td>Repeated receive address links payment history</td></tr>
+    <tr><td><code>CIOH</code></td><td>Multi-input ownership clustering signal</td></tr>
+    <tr><td><code>DUST</code> / <code>DUST_SPENDING</code></td><td>Dust + normal co-spend linkage pattern</td></tr>
+    <tr><td><code>CHANGE_DETECTION</code></td><td>Payment and change outputs become distinguishable</td></tr>
+    <tr><td><code>CONSOLIDATION</code> / <code>CLUSTER_MERGE</code></td><td>Input histories merged into one traceable cluster</td></tr>
+    <tr><td><code>SCRIPT_TYPE_MIXING</code></td><td>Mixed script families create a wallet fingerprint</td></tr>
+    <tr><td><code>UTXO_AGE_SPREAD</code></td><td>Old/new spread leaks dormancy behavior</td></tr>
+    <tr><td><code>EXCHANGE_ORIGIN</code></td><td>Probable exchange withdrawal origin signature</td></tr>
+    <tr><td><code>TAINTED_UTXO_MERGE</code></td><td>Tainted + clean merge propagates contamination</td></tr>
+    <tr><td><code>BEHAVIORAL_FINGERPRINT</code></td><td>Consistent transaction style re-identifies wallet</td></tr>
+  </tbody>
+</table>
 
-| Detector Type | Meaning |
-|---------------|---------|
-| `ADDRESS_REUSE` | Same address received multiple payments, linking history |
-| `CIOH` | Multi-input ownership clustering signal |
-| `DUST` / `DUST_SPENDING` | Dust detection and dust+normal co-spend linkage |
-| `CHANGE_DETECTION` | Payment/change outputs become easy to distinguish |
-| `CONSOLIDATION` / `CLUSTER_MERGE` | Input histories merged into one cluster |
-| `SCRIPT_TYPE_MIXING` | Mixed input script families create fingerprint |
-| `UTXO_AGE_SPREAD` | Old/new UTXO spread leaks dormancy patterns |
-| `EXCHANGE_ORIGIN` | Probable exchange batch-withdrawal origin |
-| `TAINTED_UTXO_MERGE` | Tainted + clean input merge propagates taint |
-| `BEHAVIORAL_FINGERPRINT` | Transaction style consistency re-identifies wallet |
-| Warnings: `DORMANT_UTXOS`, `DIRECT_TAINT` | Non-finding risk signals shown separately |
-
----
-
-# How It Works
-
-<div class="grid grid-cols-3 gap-4">
-
-<div class="card p-4">
-
-**1. Parse**
-- Extract addresses from descriptor
-- Support all common formats
-
-</div>
-
-<div class="card p-4">
-
-**2. Fetch**
-- On-chain history per address
-- Uses Bitcoin node / API
-
-</div>
-
-<div class="card p-4">
-
-**3. Analyze**
-- Apply privacy heuristics
-- Flag each UTXO with findings
-
-</div>
-
-</div>
+<p class="footnote">Warnings: <code>DORMANT_UTXOS</code> and <code>DIRECT_TAINT</code> are shown as contextual risk signals.</p>
 
 ---
 
-# Architecture
+## How It Works
+<br>
+<div class="split three">
 
-```
+<div class="panel step">
+
+<p class="step-index">01</p>
+<h3>Parse</h3>
+<ul class="list">
+  <li>Extract addresses from descriptor</li>
+  <li>Normalize all common formats</li>
+</ul>
+
+</div>
+
+<div class="panel step">
+
+<p class="step-index">02</p>
+<h3>Fetch</h3>
+<ul class="list">
+  <li>Load on-chain history per address</li>
+  <li>Use Bitcoin node or indexed API source</li>
+</ul>
+
+</div>
+
+<div class="panel step">
+
+<p class="step-index">03</p>
+<h3>Analyze</h3>
+<ul class="list">
+  <li>Apply privacy heuristics and warnings</li>
+  <li>Flag each UTXO with findings and evidence</li>
+</ul>
+
+</div>
+
+</div>
+
+---
+
+## Architecture
+
+```txt
 stealth/
-├── frontend/   # React + Vite — input, loading, report
-└── backend/    # Java/Quarkus — descriptor parsing, chain data, analysis
+|-- frontend/   # React + Vite: input, loading, report
+`-- backend/    # Java/Quarkus: parsing, chain data, analysis
 ```
 
-- **Read-only** — no keys, no storage, no transmission of descriptors
-- **Self-hostable** — point at your own node for max privacy
+<div class="split two">
+  <div class="panel">
+    <p class="kicker">Security Model</p>
+    <p class="strong">Read-only</p>
+    <p class="muted">No private keys, no descriptor storage, no hidden transmission path.</p>
+  </div>
+  <div class="panel">
+    <p class="kicker">Deployment</p>
+    <p class="strong">Self-hostable</p>
+    <p class="muted">Point to your own node for maximum privacy and deterministic trust.</p>
+  </div>
+</div>
 
 ---
 
-# Demo Flow
+## Demo Flow
 
-1. **Input screen** — paste descriptor, click Analyze
-2. **Loading** — fetches and analyzes
-3. **Report** — summary bar (findings / warnings / tx analyzed)
-4. Expandable finding cards: type, severity, description, structured evidence
-
----
-
-# Why It Matters
-
-- **Users** — understand exposure before consolidating or spending
-- **Wallets** — integrate as pre-spend check
-- **Researchers** — study privacy heuristics at scale
-- **Privacy-first** — no cloud, no logs, no tracking
+<div class="panel">
+  <ol class="flow">
+    <li><span>Input</span> Paste descriptor and trigger analysis</li>
+    <li><span>Load</span> Fetch + parse + detect in one pipeline</li>
+    <li><span>Report</span> Summary bar: findings / warnings / transactions</li>
+    <li><span>Inspect</span> Expand finding cards for severity and evidence payloads</li>
+  </ol>
+</div>
 
 ---
 
-# Thank You
+## Demo
 
-**STEAL<span class="accent">TH</span>**
-
-Bitcoin Wallet Privacy Analyzer
+<div class="panel">
+  <video
+    controls
+    autoplay
+    muted
+    loop
+    playsinline
+    src="/demo-2x-fast.mp4"
+    style="width: 100%; border-radius: 12px; border: 1px solid var(--border);"
+  ></video>
+  <p class="footnote">2x playback and compressed for lightweight deck rendering.</p>
+</div>
 
 ---
 
-# Appendix — Supported Descriptors
+## Roadmap
 
-- `wpkh(...)` — native SegWit
-- `pkh(...)` — legacy
-- `sh(wpkh(...))` — nested SegWit
-- `tr(...)` — Taproot
-- Multisig variants
+<div class="split two">
+  <div class="panel">
+    <p class="kicker">Expanded Heuristics</p>
+    <ul class="list">
+      <li><code>LEGACY_SCRIPT_EXPOSURE</code> — old script usage (<code>p2pkh</code> / nested-only flows) shrinking anonymity set</li>
+      <li><code>ADDRESS_GAP_LEAK</code> — sparse derivation usage exposing wallet generation behavior</li>
+      <li><code>AMOUNT_FINGERPRINT</code> — repeated denomination templates across spends</li>
+      <li><code>TIME_PATTERN_FINGERPRINT</code> — recurring timing cadence linking sessions</li>
+    </ul>
+  </div>
+  <div class="panel">
+    <p class="kicker">Improvements</p>
+    <ul class="list">
+      <li><b>Mainnet Support</b></li><br>
+      <li><b>Mobile Support</b></li><br>
+      <li><b>Cluster Visualization</b></li><br>
+      <li><b>One-click solution</b></li>
+    </ul>
+  </div>
+</div>
 
-All analysis uses publicly available on-chain data.
+<p class="footnote">Roadmap detectors are additive and keep the same read-only, no-key security model.</p>
+
+---
+
+<div class="hero-wrap end">
+  <p class="eyebrow">Thank You</p>
+  <h1 class="hero-title">STEAL<span class="accent">TH</span></h1>
+  <p class="hero-subtitle">Bitcoin Wallet Privacy Analyzer</p>
+  <p class="hero-copy">Protect privacy before you broadcast intent.</p>
+</div>
+
+---
+
+## Appendix — Supported Descriptors
+
+<div class="panel">
+  <ul class="list">
+    <li><code>wpkh(...)</code> — native SegWit</li>
+    <li><code>pkh(...)</code> — legacy</li>
+    <li><code>sh(wpkh(...))</code> — nested SegWit</li>
+    <li><code>tr(...)</code> — Taproot</li>
+    <li>Multisig variants</li>
+  </ul>
+</div>
+
+<p class="footnote">All analysis relies only on publicly available on-chain data.</p>

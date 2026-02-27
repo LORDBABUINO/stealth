@@ -3,3 +3,10 @@ dist/
 .env
 .env.local
 *.local
+.DS_Store
+.specstory
+.cursorindexingignore
+.cursor
+.vscode
+.pnpm-store
+.qwen
