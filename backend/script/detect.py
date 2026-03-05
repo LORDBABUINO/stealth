@@ -169,6 +169,8 @@ class TxGraph:
         self.our_addrs = set(addr_map.keys())
         self.utxos = utxos                # current UTXOs
         self.tx_cache = {}                # txid -> decoded tx
+        self._input_cache = {}            # txid -> parsed input addresses
+        self._output_cache = {}           # txid -> parsed output addresses
         self.our_txids = set()            # txids we participate in
 
         # Index: address -> list of (txid, direction, value)
@@ -202,9 +204,12 @@ class TxGraph:
         return self.tx_cache[txid]
 
     def get_input_addresses(self, txid):
-        """Get all input addresses for a transaction."""
+        """Get all input addresses for a transaction (cached)."""
+        if txid in self._input_cache:
+            return self._input_cache[txid]
         tx = self.fetch_tx(txid)
         if not tx:
+            self._input_cache[txid] = []
             return []
         addrs = []
         for vin in tx.get("vin", []):
@@ -216,12 +221,16 @@ class TxGraph:
                 addr = vout_data.get("scriptPubKey", {}).get("address", "")
                 value = vout_data.get("value", 0)
                 addrs.append({"address": addr, "value": value, "txid": vin["txid"], "vout": vin["vout"]})
+        self._input_cache[txid] = addrs
         return addrs
 
     def get_output_addresses(self, txid):
-        """Get all output addresses for a transaction."""
+        """Get all output addresses for a transaction (cached)."""
+        if txid in self._output_cache:
+            return self._output_cache[txid]
         tx = self.fetch_tx(txid)
         if not tx:
+            self._output_cache[txid] = []
             return []
         addrs = []
         for vout in tx.get("vout", []):
@@ -232,6 +241,7 @@ class TxGraph:
                 "n": vout["n"],
                 "type": vout.get("scriptPubKey", {}).get("type", "unknown"),
             })
+        self._output_cache[txid] = addrs
         return addrs
 
     def is_ours(self, address):
