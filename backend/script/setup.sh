@@ -3,10 +3,9 @@
 # setup.sh — Bootstrap Bitcoin Core regtest for privacy vulnerability testing
 # =============================================================================
 # Reproduces the full environment:
-#   • Writes ~/.bitcoin/bitcoin.conf (regtest, txindex, dustrelayfee, etc.)
 #   • Stops any running bitcoind (both regtest and signet)
 #   • Optionally wipes the regtest data dir (pass --fresh to start from block 0)
-#   • Starts:  bitcoind -daemon -regtest
+#   • Starts bitcoind with all config passed via CLI flags (no bitcoin.conf edits)
 #   • Creates wallets: miner alice bob carol exchange risky
 #   • Mines 110 blocks so coinbases mature and miner has spendable BTC
 #
@@ -23,7 +22,6 @@ info() { echo -e "  ${Y}ℹ${RST} $*"; }
 err()  { echo -e "  ${R}✗${RST} $*"; exit 1; }
 
 # ─── Config ───────────────────────────────────────────────────────────────────
-BITCOIN_CONF="${HOME}/.bitcoin/bitcoin.conf"
 REGTEST_DIR="${HOME}/.bitcoin/regtest"
 WALLETS=(miner alice bob carol exchange risky)
 INITIAL_BLOCKS=110          # must be >100 so coinbases mature
@@ -68,48 +66,27 @@ if pgrep -x bitcoind > /dev/null 2>&1; then
   sleep 2
 fi
 
-# ─── 2. Write bitcoin.conf ────────────────────────────────────────────────────
-echo ""
-echo -e "${B}Step 2: Write ${BITCOIN_CONF}${RST}"
-mkdir -p "$(dirname "$BITCOIN_CONF")"
-
-cat > "$BITCOIN_CONF" << 'EOF'
-# Bitcoin Core configuration
-# Network: regtest (local testing only)
-regtest=1
-txindex=1
-
-[regtest]
-# Fee policy — needed so wallets can broadcast without estimatefee data
-fallbackfee=0.00010
-
-# Allow outputs as small as 1 sat (needed for dust-attack reproduction)
-dustrelayfee=0.00000001
-
-# Accept non-standard transactions (needed for some test scenarios)
-acceptnonstdtxn=1
-
-# Enable RPC server
-server=1
-EOF
-
-ok "Wrote bitcoin.conf"
-
-# ─── 3. Optionally wipe regtest chain ─────────────────────────────────────────
+# ─── 2. Optionally wipe regtest chain ────────────────────────────────────────
 if [[ $FRESH -eq 1 ]]; then
   echo ""
-  echo -e "${B}Step 3: Wipe regtest data dir${RST}"
+  echo -e "${B}Step 2: Wipe regtest data dir${RST}"
   rm -rf "$REGTEST_DIR"
   ok "Wiped ${REGTEST_DIR}"
 else
   echo ""
-  info "Step 3: Keeping existing regtest chain (use --fresh to wipe)"
+  info "Step 2: Keeping existing regtest chain (use --fresh to wipe)"
 fi
 
-# ─── 4. Start bitcoind ────────────────────────────────────────────────────────
+# ─── 3. Start bitcoind ────────────────────────────────────────────────────────
 echo ""
-echo -e "${B}Step 4: Start bitcoind -daemon -regtest${RST}"
-bitcoind -daemon -regtest
+echo -e "${B}Step 3: Start bitcoind${RST}"
+bitcoind -daemon \
+  -regtest \
+  -txindex=1 \
+  -server=1 \
+  -fallbackfee=0.00010 \
+  -dustrelayfee=0.00000001 \
+  -acceptnonstdtxn=1
 ok "bitcoind launched"
 
 # Wait for RPC to become ready
@@ -131,9 +108,9 @@ done
 BLOCKS=$(bitcoin-cli -regtest getblockcount)
 info "Chain height: ${BLOCKS} blocks"
 
-# ─── 5. Create / load wallets ─────────────────────────────────────────────────
+# ─── 4. Create / load wallets ─────────────────────────────────────────────────
 echo ""
-echo -e "${B}Step 5: Create wallets${RST}"
+echo -e "${B}Step 4: Create wallets${RST}"
 for w in "${WALLETS[@]}"; do
   if bitcoin-cli -regtest createwallet "$w" 2>/dev/null | grep -q '"name"'; then
     ok "Created wallet: ${w}"
@@ -148,9 +125,9 @@ for w in "${WALLETS[@]}"; do
   fi
 done
 
-# ─── 6. Mine initial blocks (only if fresh or chain has <110 blocks) ──────────
+# ─── 5. Mine initial blocks (only if fresh or chain has <110 blocks) ──────────
 echo ""
-echo -e "${B}Step 6: Mine initial blocks${RST}"
+echo -e "${B}Step 5: Mine initial blocks${RST}"
 BLOCKS=$(bitcoin-cli -regtest getblockcount)
 
 if [[ $BLOCKS -lt $INITIAL_BLOCKS ]]; then
@@ -167,7 +144,7 @@ fi
 MINER_BAL=$(bitcoin-cli -regtest -rpcwallet=miner getbalance)
 ok "Miner balance: ${MINER_BAL} BTC"
 
-# ─── 7. Summary ───────────────────────────────────────────────────────────────
+# ─── 6. Summary ───────────────────────────────────────────────────────────────
 echo ""
 echo -e "${B}${C}══════════════════════════════════════════════════════════${RST}"
 echo -e "${B}  Setup complete!${RST}"
