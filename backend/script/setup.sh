@@ -21,7 +21,6 @@ DATADIR="${SCRIPT_DIR}/bitcoin-data"
 REGTEST_DIR="${DATADIR}/regtest"
 WALLETS=(miner alice bob carol exchange risky)
 INITIAL_BLOCKS=110          # must be >100 so coinbases mature
-MINER_FUND_BTC=500          # approximate, depends on block subsidy
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 G="\033[92m"; Y="\033[93m"; R="\033[91m"; B="\033[1m"; C="\033[96m"; RST="\033[0m"
@@ -52,14 +51,6 @@ if bcli stop 2>/dev/null; then
   sleep 2
 else
   info "No regtest bitcoind running (or already stopped)"
-fi
-
-# Try to stop signet instance (port 38332) if one is running
-if bitcoin-cli -signet stop 2>/dev/null; then
-  ok "Stopped signet bitcoind"
-  sleep 2
-else
-  info "No signet bitcoind running"
 fi
 
 # Hard-kill any remaining bitcoind processes
@@ -163,5 +154,4 @@ echo -e "    python3 reproduce.py     # create 12 vulnerability scenarios"
 echo -e "    python3 detect.py --wallet alice \\"
 echo -e "            --known-risky-wallets risky \\"
 echo -e "            --known-exchange-wallets exchange"
-echo -e "    python3 verify.py --fresh  # full automated proof"
 echo ""
