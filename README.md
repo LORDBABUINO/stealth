@@ -31,6 +31,7 @@ Stealth ships a Rust workspace with:
 
 - `stealth-engine` (analysis engine)
 - `stealth-model` (domain model types and interfaces)
+- `stealth-api` (http api)
 - `stealth-bitcoincore` (Bitcoin Core RPC gateway adapter)
 
 ## Project Direction
@@ -76,12 +77,6 @@ Stealth's source-of-truth detector is:
 
 ```
 engine/src/detect.rs
-```
-
-The report model and type names are defined in:
-
-```
-engine/src/types.rs
 ```
 
 ### Severity levels
@@ -162,44 +157,47 @@ Stealth currently runs **12 detectors** in `stealth-engine`.
 ```bash
 git clone https://github.com/stealth-bitcoin/stealth.git
 cd stealth
+cargo build
 ```
 
-### 2. Configure blockchain connection
+### 2. Configure Bitcoin Core RPC
 
-Edit:
+Minimal `~/.bitcoin/bitcoin.conf`:
 
+```ini
+server=1
+rpcuser=localuser
+rpcpassword=localpass
+
+[regtest]
+rpcbind=127.0.0.1
+rpcallowip=127.0.0.1
+rpcport=18443
 ```
-backend/script/config.ini
-```
 
-### 3. Development setup (regtest)
+### 3. Start Bitcoin Core
 
-A regtest environment is provided for development and reproducible testing of heuristics.
+Regtest example:
 
 ```bash
-cd backend/script
-./setup.sh
+bitcoind -regtest -daemon
 ```
 
-### 4. Generate sample transactions
+Mainnet example:
 
 ```bash
-python3 reproduce.py
+bitcoind -daemon
 ```
 
-### 5. Start backend
+### 4. (optional) Run the CLI
 
 ```bash
-cd backend/src/StealthBackend
-./mvnw quarkus:dev
-```
-
-### 6. Start frontend
-
-```bash
-cd frontend
-yarn install
-yarn dev
+cargo run --bin stealth-cli -- scan \
+  --descriptor 'wpkh([f23f9fd2/84h/0h/0h]xpub.../0/*)' \
+  --rpc-url http://127.0.0.1:18443 \
+  --rpc-user localuser \
+  --rpc-pass localpass \
+  --format text
 ```
 
 ## Project structure
@@ -231,7 +229,9 @@ stealth/
 │   │   ├── config.ini     # Connection config (datadir, network)
 │   │   └── bitcoin-data/  # Regtest chain data (gitignored)
 │   └── src/StealthBackend/ # Quarkus Java REST API (single /api/wallet/scan endpoint)
-└── slides/                # Slidev pitch presentation
+├── slides/                # Slidev pitch presentation
+├── cli/                   # stealth-cli
+└── target/                # Cargo build outputs
 ```
 
 ### Test Coverage
