@@ -15,6 +15,11 @@ pub enum DetectorId {
     ExchangeOrigin,
     TaintedUtxoMerge,
     BehavioralFingerprint,
+    DustAttack,
+    PeelChain,
+    DeterministicLink,
+    UnnecessaryInput,
+    ToxicChange,
 }
 
 /// Numeric thresholds used by the detectors.
@@ -77,6 +82,11 @@ impl Default for AnalysisConfig {
                 DetectorId::ExchangeOrigin,
                 DetectorId::TaintedUtxoMerge,
                 DetectorId::BehavioralFingerprint,
+                DetectorId::DustAttack,
+                DetectorId::PeelChain,
+                DetectorId::DeterministicLink,
+                DetectorId::UnnecessaryInput,
+                DetectorId::ToxicChange,
             ]),
         }
     }

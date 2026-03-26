@@ -40,6 +40,11 @@ pub enum VulnerabilityType {
     TaintedUtxoMerge,
     DirectTaint,
     BehavioralFingerprint,
+    DustAttack,
+    PeelChain,
+    DeterministicLink,
+    UnnecessaryInput,
+    ToxicChange,
 }
 
 impl core::fmt::Display for VulnerabilityType {
