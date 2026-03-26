@@ -27,6 +27,14 @@ Stealth is currently transitioning from a controlled regtest environment to real
 
 The immediate focus is enabling analysis of real wallet data using a local Bitcoin node.
 
+Stealth ships a Rust workspace with:
+
+- `stealth-engine` (analysis engine)
+- `stealth-model` (domain model types and interfaces)
+- `stealth-api` (http api)
+- `stealth-cli` (cli api)
+- `stealth-bitcoincore` (Bitcoin Core RPC gateway adapter)
+
 ## Project Direction
 
 Stealth is evolving into a modular privacy heuristics engine for Bitcoin.
@@ -45,12 +53,65 @@ Stealth takes a Bitcoin wallet descriptor as input and analyzes its transaction 
 
 The report includes:
 
-- `findings`: confirmed privacy leaks
-- `warnings`: potential risks or patterns
-- Severity levels (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`)
-- Structured evidence for each issue
+- `findings`: confirmed privacy leaks with remediation guidance
+- `warnings`: lower-confidence or contextual risk signals
+- `stats`: transactions analyzed, addresses derived, and current UTXOs
+- `summary`: total findings, total warnings, and a `clean` boolean
 
-Stealth is designed to work with real wallet data and highlight privacy risks based on observed on-chain behavior.
+### Severity levels
+
+| Level | Meaning |
+| ----- | ------- |
+| `LOW` | Weak or contextual signal; monitor behavior |
+| `MEDIUM` | Meaningful privacy leakage under common heuristics |
+| `HIGH` | Strong linkage/fingerprinting risk |
+| `CRITICAL` | Very strong deanonymization signal requiring immediate mitigation |
+
+## Vulnerabilities detected
+
+Stealth currently runs **17 detectors** in `stealth-engine`.
+
+| # | Type | Default severity | What it indicates |
+|---|------|------------------|-------------------|
+| 1 | `ADDRESS_REUSE` | HIGH | Same receive address used across multiple transactions |
+| 2 | `CIOH` | HIGH - CRITICAL | Multi-input ownership linkage |
+| 3 | `DUST` | MEDIUM - HIGH | Dust outputs received/spent |
+| 4 | `DUST_SPENDING` | HIGH | Dust merged with normal inputs |
+| 5 | `CHANGE_DETECTION` | MEDIUM | Identifiable change output patterns |
+| 6 | `CONSOLIDATION` | MEDIUM | Consolidation transactions linking clusters |
+| 7 | `SCRIPT_TYPE_MIXING` | HIGH | Mixed script types that fingerprint wallet behavior |
+| 8 | `CLUSTER_MERGE` | HIGH | Previously separate clusters merged on-chain |
+| 9 | `UTXO_AGE_SPREAD` | LOW | Broad age spread revealing timing behavior |
+| 10 | `EXCHANGE_ORIGIN` | MEDIUM | Signals typical of exchange batch withdrawals |
+| 11 | `TAINTED_UTXO_MERGE` | HIGH | Tainted and clean inputs merged |
+| 12 | `BEHAVIORAL_FINGERPRINT` | MEDIUM | Repeating transaction patterns |
+| 13 | `DUST_ATTACK` | CRITICAL | Coordinated dust-pattern behavior |
+| 14 | `PEEL_CHAIN` | HIGH - CRITICAL | Repeated peeling flow across hops |
+| 15 | `DETERMINISTIC_LINK` | HIGH | Deterministic input-output mapping |
+| 16 | `UNNECESSARY_INPUT` | MEDIUM | Extra inputs increasing CIOH exposure |
+| 17 | `TOXIC_CHANGE` | HIGH | Toxic change consolidation patterns |
+
+### Warning types
+
+| Type | Typical severity | Meaning |
+| ---- | ---------------- | ------- |
+| `DORMANT_UTXOS` | LOW | Dormant/hoarded UTXO behavior |
+| `DIRECT_TAINT` | HIGH | Funds directly received from known risky source |
+| `DETERMINISTIC_LINK` | LOW | Appears as a low-risk ambiguity signal in some transactions |
+
+## Detection taxonomy
+
+The Rust detector source-of-truth is:
+
+```
+core/src/detect.rs
+```
+
+The report model and type names are defined in:
+
+```
+domain/src/types.rs
+```
 
 ## Example risks detected
 
@@ -64,41 +125,83 @@ Stealth identifies real-world privacy issues such as:
 - **UTXO consolidation** → merges previously separate histories
 - **Behavioral fingerprinting** → consistent transaction patterns over time
 
-## Detection taxonomy
+## Complete setup guide
 
-Stealth's source-of-truth detector is:
+### Prerequisites
 
+| Dependency | Version | Required for |
+| ---------- | ------- | ------------ |
+| Rust | `1.93.1+` | `core`, `api`, `cli`, tests |
+| Bitcoin Core (`bitcoind`) | `29.0+` recommended | Local blockchain/RPC source |
+| Node.js + Yarn | Optional | Frontend (`frontend/`) |
+
+### 1. Clone and build
+
+```bash
+git clone https://github.com/stealth-bitcoin/stealth.git
+cd stealth
+cargo build
 ```
-backend/script/detect.py
+
+### 2. Configure Bitcoin Core RPC
+
+Minimal `~/.bitcoin/bitcoin.conf`:
+
+```ini
+server=1
+rpcuser=localuser
+rpcpassword=localpass
+
+[regtest]
+rpcbind=127.0.0.1
+rpcallowip=127.0.0.1
+rpcport=18443
 ```
 
-### Finding types
+### 3. Start Bitcoin Core
 
-| Type                     | Meaning                                         |
-| ------------------------ | ----------------------------------------------- |
-| `ADDRESS_REUSE`          | Address received funds in multiple transactions |
-| `CIOH`                   | Multi-input linkage across co-spent inputs      |
-| `DUST`                   | Dust output detection                           |
-| `DUST_SPENDING`          | Dust inputs linking clusters                    |
-| `CHANGE_DETECTION`       | Identifiable change output                      |
-| `CONSOLIDATION`          | Many-input transaction merging UTXOs            |
-| `SCRIPT_TYPE_MIXING`     | Mixed script types in one spend                 |
-| `CLUSTER_MERGE`          | Previously separate funding chains merged       |
-| `UTXO_AGE_SPREAD`        | Reveals dormancy and timing patterns            |
-| `EXCHANGE_ORIGIN`        | Likely exchange withdrawal origin               |
-| `TAINTED_UTXO_MERGE`     | Tainted inputs propagating risk                 |
-| `BEHAVIORAL_FINGERPRINT` | Consistent identifiable patterns                |
+Regtest example:
 
-### Warning types
+```bash
+bitcoind -regtest -daemon
+```
 
-| Type            | Meaning                          |
-| --------------- | -------------------------------- |
-| `DORMANT_UTXOS` | Dormant funds pattern            |
-| `DIRECT_TAINT`  | Direct exposure to risky sources |
+Mainnet example:
 
-## How to use
+```bash
+bitcoind -daemon
+```
 
-1. Open the application
+### 4. Start the API
+
+```bash
+cargo run --bin stealth-api
+```
+
+`stealth-api` auto-detects common local RPC ports and can use credentials from `~/.bitcoin/bitcoin.conf`, cookie file, or env vars.
+
+### 5. Run a scan request
+
+```bash
+curl 'http://localhost:20899/api/wallet/scan' \
+  -H 'content-type: application/json' \
+  -d '{"descriptor":"wpkh([f23f9fd2/84h/0h/0h]xpub.../0/*)"}' | jq
+```
+
+### 6. Run the CLI (optional)
+
+```bash
+cargo run --bin stealth-cli -- scan \
+  --descriptor 'wpkh([f23f9fd2/84h/0h/0h]xpub.../0/*)' \
+  --rpc-url http://127.0.0.1:18443 \
+  --rpc-user localuser \
+  --rpc-pass localpass \
+  --format text
+```
+
+## How to use the frontend
+
+1. Run and open the application
 2. Paste a wallet descriptor (`wpkh(...)`, `tr(...)`, etc.)
 3. Click **Analyze**
 4. Review:
@@ -110,7 +213,7 @@ backend/script/detect.py
 
 ### Short term
 
-- [ ] Rewrite the analysis engine in Rust, replacing the current multi-language implementation
+- [x] Rewrite the analysis engine in Rust, replacing the current multi-language implementation
 - [ ] Add support for analyzing real wallet data using a local Bitcoin node (mainnet)
 
 ### Medium term
@@ -123,81 +226,36 @@ backend/script/detect.py
 - [ ] Enable external clients (e.g. wallets, tools like am-i-exposed)
 - [ ] Integrate with Floresta
 
-## Installation
-
-### Prerequisites
-
-| Dependency     | Version | Purpose         |
-| -------------- | ------- | --------------- |
-| Bitcoin Core   | ≥ 26    | Local node      |
-| Python         | ≥ 3.10  | Analysis engine |
-| Java           | 21      | Backend         |
-| Node.js + yarn | ≥ 18    | Frontend        |
-
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/stealth-bitcoin/stealth.git
-cd stealth
-```
-
-### 2. Configure blockchain connection
-
-Edit:
-
-```
-backend/script/config.ini
-```
-
-### 3. Development setup (regtest)
-
-A regtest environment is provided for development and reproducible testing of heuristics.
-
-```bash
-cd backend/script
-./setup.sh
-```
-
-### 4. Generate sample transactions
-
-```bash
-python3 reproduce.py
-```
-
-### 5. Start backend
-
-```bash
-cd backend/src/StealthBackend
-./mvnw quarkus:dev
-```
-
-### 6. Start frontend
-
-```bash
-cd frontend
-yarn install
-yarn dev
-```
-
 ## Project structure
 
 ```
 stealth/
-├── frontend/              # React + Vite UI
-│   └── src/
-│       ├── components/    # FindingCard, VulnerabilityBadge
-│       ├── screens/       # InputScreen, LoadingScreen, ReportScreen
-│       └── services/      # walletService.js (API client)
-├── backend/
-│   ├── script/            # Python scripts + regtest data
-│   │   ├── setup.sh       # Bootstrap bitcoind regtest
-│   │   ├── reproduce.py   # Create 12 vulnerability scenarios
-│   │   ├── detect.py      # Privacy vulnerability detector
-│   │   ├── bitcoin_rpc.py # bitcoin-cli wrapper
-│   │   ├── config.ini     # Connection config (datadir, network)
-│   │   └── bitcoin-data/  # Regtest chain data (gitignored)
-│   └── src/StealthBackend/ # Quarkus Java REST API (single /api/wallet/scan endpoint)
-└── slides/                # Slidev pitch presentation
+├── Cargo.toml              # Rust workspace definition
+├── engine/                 # stealth-engine (detectors + graph + report model)
+│   ├── src/
+│   │   ├── detect.rs       # privacy detectors
+│   │   ├── engine.rs       # AnalysisEngine entry point
+│   │   ├── graph.rs        # Transaction graph builder
+│   │   └── lib.rs          # Crate root and re-exports
+│   └── tests/
+│       └── integration.rs  # Regtest integration tests
+├── model/                  # stealth-model (domain model types and interfaces)
+├── api/                    # stealth-api (Axum HTTP layer)
+│   ├── src/
+│   └── tests/
+├── cli/                    # stealth-cli (terminal scanner)
+├── bitcoincore/            # Bitcoin Core gateway implementation crate
+├── frontend/               # React + Vite UI
+└── target/                 # Cargo build outputs
+```
+
+### Test Coverage
+
+Stealth test coverage includes end-to-end api tests, integration tests using bitcoind regtest in core/ and additional unit tests.  
+
+You may run tests with:
+```bash
+cargo test
 ```
 
 ## Privacy notice
