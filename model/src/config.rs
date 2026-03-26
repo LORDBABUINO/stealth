@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+/// Identifies a specific detector for enable/disable configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DetectorId {
     AddressReuse,
@@ -14,8 +15,14 @@ pub enum DetectorId {
     ExchangeOrigin,
     TaintedUtxoMerge,
     BehavioralFingerprint,
+    DustAttack,
+    PeelChain,
+    DeterministicLink,
+    UnnecessaryInput,
+    ToxicChange,
 }
 
+/// Numeric thresholds used by the detectors.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DetectorThresholds {
     pub dust_sats: u64,
@@ -25,7 +32,10 @@ pub struct DetectorThresholds {
     pub consolidation_max_outputs: usize,
     pub utxo_age_spread_blocks: u32,
     pub dormant_utxo_blocks: u32,
-    pub exchange_batch_outputs: usize,
+    pub exchange_batch_min_outputs: usize,
+    pub dust_attack_min_outputs: usize,
+    pub dust_attack_min_dust_outputs: usize,
+    pub toxic_change_upper_sats: u64,
 }
 
 impl Default for DetectorThresholds {
@@ -38,11 +48,15 @@ impl Default for DetectorThresholds {
             consolidation_max_outputs: 2,
             utxo_age_spread_blocks: 10,
             dormant_utxo_blocks: 100,
-            exchange_batch_outputs: 5,
+            exchange_batch_min_outputs: 5,
+            dust_attack_min_outputs: 10,
+            dust_attack_min_dust_outputs: 5,
+            toxic_change_upper_sats: 10_000,
         }
     }
 }
 
+/// Top-level analysis configuration.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AnalysisConfig {
     pub derivation_range_end: u32,
@@ -68,6 +82,11 @@ impl Default for AnalysisConfig {
                 DetectorId::ExchangeOrigin,
                 DetectorId::TaintedUtxoMerge,
                 DetectorId::BehavioralFingerprint,
+                DetectorId::DustAttack,
+                DetectorId::PeelChain,
+                DetectorId::DeterministicLink,
+                DetectorId::UnnecessaryInput,
+                DetectorId::ToxicChange,
             ]),
         }
     }

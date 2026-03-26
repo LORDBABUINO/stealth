@@ -1,117 +1,59 @@
+use std::collections::{HashMap, HashSet};
+
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum Severity {
-    Low,
-    Medium,
-    High,
-    Critical,
+use crate::descriptor::DescriptorNormalizer;
+use crate::error::AnalysisError;
+
+/// Abstraction over a blockchain data source (e.g. Bitcoin Core RPC).
+///
+/// Implementations provide descriptor normalization, address derivation,
+/// wallet scanning, and transaction history retrieval. This trait decouples
+/// domain logic from the concrete RPC transport, making it possible to
+/// test with mocks.
+pub trait BlockchainGateway {
+    fn normalize_descriptor(&self, descriptor: &str) -> Result<String, AnalysisError>;
+    fn derive_addresses(
+        &self,
+        descriptor: &ResolvedDescriptor,
+    ) -> Result<Vec<String>, AnalysisError>;
+    fn scan_descriptors(
+        &self,
+        descriptors: &[ResolvedDescriptor],
+    ) -> Result<WalletHistory, AnalysisError>;
+    fn list_wallet_descriptors(
+        &self,
+        wallet_name: &str,
+    ) -> Result<Vec<ResolvedDescriptor>, AnalysisError>;
+    fn scan_wallet(&self, wallet_name: &str) -> Result<WalletHistory, AnalysisError>;
+    fn known_wallet_txids(&self, wallet_names: &[String])
+        -> Result<HashSet<String>, AnalysisError>;
+    fn get_transaction(&self, txid: &str) -> Result<DecodedTransaction, AnalysisError>;
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum FindingKind {
-    AddressReuse,
-    Cioh,
-    Dust,
-    DustSpending,
-    ChangeDetection,
-    Consolidation,
-    ScriptTypeMixing,
-    ClusterMerge,
-    UtxoAgeSpread,
-    ExchangeOrigin,
-    TaintedUtxoMerge,
-    BehavioralFingerprint,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum WarningKind {
-    DormantUtxos,
-    DirectTaint,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum FindingDetails {
-    Generic(Value),
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum WarningDetails {
-    Generic(Value),
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Finding {
-    #[serde(rename = "type")]
-    pub kind: FindingKind,
-    pub severity: Severity,
-    pub description: String,
-    pub details: FindingDetails,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub correction: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Warning {
-    #[serde(rename = "type")]
-    pub kind: WarningKind,
-    pub severity: Severity,
-    pub description: String,
-    pub details: WarningDetails,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AnalysisStats {
-    pub transactions_analyzed: usize,
-    pub addresses_derived: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AnalysisSummary {
-    pub findings: usize,
-    pub warnings: usize,
-    pub clean: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct AnalysisReport {
-    pub stats: AnalysisStats,
-    pub findings: Vec<Finding>,
-    pub warnings: Vec<Warning>,
-    pub summary: AnalysisSummary,
-}
-
-impl AnalysisReport {
-    pub fn new(
-        transactions_analyzed: usize,
-        addresses_derived: usize,
-        findings: Vec<Finding>,
-        warnings: Vec<Warning>,
-    ) -> Self {
-        let summary = AnalysisSummary {
-            findings: findings.len(),
-            warnings: warnings.len(),
-            clean: findings.is_empty() && warnings.is_empty(),
-        };
-
-        Self {
-            stats: AnalysisStats {
-                transactions_analyzed,
-                addresses_derived,
-            },
-            findings,
-            warnings,
-            summary,
-        }
+/// Blanket implementation: any `BlockchainGateway` is also a
+/// `DescriptorNormalizer`.
+impl<T> DescriptorNormalizer for T
+where
+    T: BlockchainGateway + ?Sized,
+{
+    fn normalize(&self, descriptor: &str) -> Result<String, AnalysisError> {
+        self.normalize_descriptor(descriptor)
     }
 }
 
+// ── Gateway model types ─────────────────────────────────────────────────────
+
+/// A descriptor that has been normalized and resolved for import.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ResolvedDescriptor {
+    pub desc: String,
+    pub internal: bool,
+    pub active: bool,
+    pub range_end: u32,
+}
+
+/// Role of a descriptor chain (external receive vs internal change).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DescriptorChainRole {
@@ -119,6 +61,7 @@ pub enum DescriptorChainRole {
     Internal,
 }
 
+/// Script/address type derived from a descriptor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DescriptorType {
@@ -175,6 +118,7 @@ impl DescriptorType {
     }
 }
 
+/// A derived address with metadata about its origin descriptor.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DerivedAddress {
     pub address: String,
@@ -183,14 +127,7 @@ pub struct DerivedAddress {
     pub derivation_index: u32,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ResolvedDescriptor {
-    pub desc: String,
-    pub internal: bool,
-    pub active: bool,
-    pub range_end: u32,
-}
-
+/// Wallet transaction category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WalletTxCategory {
@@ -199,6 +136,7 @@ pub enum WalletTxCategory {
     Unknown,
 }
 
+/// A wallet transaction entry (from `listtransactions`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WalletTxEntry {
     pub txid: String,
@@ -209,6 +147,7 @@ pub struct WalletTxEntry {
     pub blockheight: u32,
 }
 
+/// An input reference within a decoded transaction.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TxInputRef {
     #[serde(rename = "txid")]
@@ -219,6 +158,7 @@ pub struct TxInputRef {
     pub coinbase: bool,
 }
 
+/// A transaction output.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TxOutput {
     pub n: u32,
@@ -227,6 +167,7 @@ pub struct TxOutput {
     pub script_type: DescriptorType,
 }
 
+/// A fully decoded transaction with inputs and outputs.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DecodedTransaction {
     pub txid: String,
@@ -238,6 +179,7 @@ pub struct DecodedTransaction {
     pub confirmations: u32,
 }
 
+/// A current unspent transaction output.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Utxo {
     pub txid: String,
@@ -248,13 +190,16 @@ pub struct Utxo {
     pub script_type: DescriptorType,
 }
 
+/// Complete wallet history with transactions and UTXOs.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WalletHistory {
     pub wallet_txs: Vec<WalletTxEntry>,
     pub utxos: Vec<Utxo>,
-    pub transactions: std::collections::HashMap<String, DecodedTransaction>,
+    pub transactions: HashMap<String, DecodedTransaction>,
 }
 
+/// A participant (input or output) in a transaction, enriched with
+/// ownership information.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TransactionParticipant {
     pub address: String,

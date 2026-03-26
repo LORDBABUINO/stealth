@@ -1,5 +1,6 @@
 use thiserror::Error;
 
+/// Errors from the analysis pipeline.
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum AnalysisError {
     #[error("descriptor input cannot be empty")]
@@ -10,4 +11,6 @@ pub enum AnalysisError {
     EnvironmentUnavailable(String),
     #[error("analysis found no history for the supplied descriptors")]
     AnalysisEmpty,
+    #[error("analysis execution failed: {0}")]
+    Execution(String),
 }
