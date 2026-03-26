@@ -2,13 +2,17 @@
 name = "stealth-bitcoincore"
 version.workspace = true
 edition.workspace = true
+authors.workspace = true
 license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Bitcoin Core RPC gateway for stealth-engine"
 
 [dependencies]
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 ini = { package = "rust-ini", version = "0.21" }
-serde.workspace = true
-serde_json.workspace = true
-stealth-core = { path = "../stealth-core" }
-thiserror.workspace = true
+serde = { workspace = true }
+serde_json = { workspace = true }
+stealth-model = { workspace = true }
+thiserror = { workspace = true }
 urlencoding = "2.1"

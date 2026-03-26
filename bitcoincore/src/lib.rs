@@ -5,14 +5,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use ini::Ini;
 use reqwest::blocking::Client;
-use serde::Deserialize;
 use serde::de::DeserializeOwned;
-use serde_json::{Value, json};
-use stealth_core::error::AnalysisError;
-use stealth_core::gateway::BlockchainGateway;
-use stealth_core::model::{
-    DecodedTransaction, DescriptorType, ResolvedDescriptor, TxInputRef, TxOutput, Utxo,
-    WalletHistory, WalletTxCategory, WalletTxEntry,
+use serde::Deserialize;
+use serde_json::{json, Value};
+use stealth_model::error::AnalysisError;
+use stealth_model::gateway::{
+    BlockchainGateway, DecodedTransaction, DescriptorType, ResolvedDescriptor, TxInputRef,
+    TxOutput, Utxo, WalletHistory, WalletTxCategory, WalletTxEntry,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -93,13 +92,8 @@ impl BitcoinCoreConfig {
             if !candidate.exists() {
                 continue;
             }
-            let contents = fs::read_to_string(&candidate)
-                .map_err(|error| AnalysisError::EnvironmentUnavailable(error.to_string()))?;
-            let mut parts = contents.trim().splitn(2, ':');
-            let user = parts.next().unwrap_or_default().to_string();
-            let password = parts.next().unwrap_or_default().to_string();
-            if !user.is_empty() && !password.is_empty() {
-                return Ok((user, password));
+            if let Ok(creds) = read_cookie_file(&candidate) {
+                return Ok(creds);
             }
         }
 
@@ -107,6 +101,40 @@ impl BitcoinCoreConfig {
             "could not locate a readable Bitcoin Core cookie file".into(),
         ))
     }
+}
+
+/// Read a Bitcoin Core `.cookie` file, returning `(user, password)`.
+///
+/// The cookie format is a single line of `__cookie__:hex_password`.
+pub fn read_cookie_file(path: &Path) -> Result<(String, String), AnalysisError> {
+    let contents = fs::read_to_string(path).map_err(|e| {
+        AnalysisError::EnvironmentUnavailable(format!(
+            "cannot read cookie file {}: {e}",
+            path.display()
+        ))
+    })?;
+    let mut parts = contents.trim().splitn(2, ':');
+    let user = parts
+        .next()
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| {
+            AnalysisError::EnvironmentUnavailable(format!(
+                "invalid cookie file {}",
+                path.display()
+            ))
+        })?
+        .to_string();
+    let pass = parts
+        .next()
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| {
+            AnalysisError::EnvironmentUnavailable(format!(
+                "invalid cookie file {}",
+                path.display()
+            ))
+        })?
+        .to_string();
+    Ok((user, pass))
 }
 
 pub struct BitcoinCoreRpc {
@@ -120,6 +148,27 @@ impl BitcoinCoreRpc {
             .build()
             .map_err(|error| AnalysisError::EnvironmentUnavailable(error.to_string()))?;
         Ok(Self { config, client })
+    }
+
+    /// Construct a gateway from a URL and optional credentials.
+    ///
+    /// This mirrors the env-var based configuration used by the HTTP
+    /// API (`STEALTH_RPC_URL`, `STEALTH_RPC_USER`, `STEALTH_RPC_PASS`).
+    pub fn from_url(
+        url: &str,
+        user: Option<String>,
+        password: Option<String>,
+    ) -> Result<Self, AnalysisError> {
+        let (host, port) = parse_host_port_from_url(url);
+        let config = BitcoinCoreConfig {
+            network: infer_network_from_port(port),
+            datadir: None,
+            rpchost: host,
+            rpcport: port,
+            rpcuser: user,
+            rpcpassword: password,
+        };
+        Self::new(config)
     }
 
     fn rpc_url(&self, wallet: Option<&str>) -> String {
@@ -359,13 +408,17 @@ impl BlockchainGateway for BitcoinCoreRpc {
         let imports = descriptors
             .iter()
             .map(|descriptor| {
-                json!({
+                let is_ranged = descriptor.desc.contains('*');
+                let mut entry = json!({
                     "desc": descriptor.desc,
                     "timestamp": 0,
                     "internal": descriptor.internal,
-                    "active": descriptor.active,
-                    "range": [0, descriptor.range_end],
-                })
+                    "active": is_ranged && descriptor.active,
+                });
+                if is_ranged {
+                    entry["range"] = json!([0, descriptor.range_end]);
+                }
+                entry
             })
             .collect::<Vec<_>>();
 
@@ -375,9 +428,14 @@ impl BlockchainGateway for BitcoinCoreRpc {
             vec![json!(imports)],
         )?;
         if import_results.iter().any(|result| !result.success) {
+            let errors: Vec<_> = import_results
+                .iter()
+                .filter(|r| !r.success)
+                .filter_map(|r| r.error.as_ref().map(|e| e.message.as_str()))
+                .collect();
             self.unload_wallet(&wallet_name);
             return Err(AnalysisError::EnvironmentUnavailable(
-                "descriptor import failed".into(),
+                format!("descriptor import failed: {}", errors.join("; ")),
             ));
         }
 
@@ -428,6 +486,10 @@ impl BlockchainGateway for BitcoinCoreRpc {
         }
         Ok(txids)
     }
+
+    fn get_transaction(&self, txid: &str) -> Result<DecodedTransaction, AnalysisError> {
+        self.get_transaction(txid)
+    }
 }
 
 fn default_rpc_port(network: &str) -> u16 {
@@ -449,6 +511,32 @@ fn descriptor_type_from_script_pub_key(script_type: &str) -> DescriptorType {
     }
 }
 
+fn parse_host_port_from_url(url: &str) -> (String, u16) {
+    let without_scheme = url
+        .strip_prefix("http://")
+        .or_else(|| url.strip_prefix("https://"))
+        .unwrap_or(url);
+    let authority = without_scheme.split('/').next().unwrap_or(without_scheme);
+    match authority.rsplit_once(':') {
+        Some((host, port_str)) => {
+            let port = port_str.parse::<u16>().unwrap_or(8332);
+            (host.to_owned(), port)
+        }
+        None => (authority.to_owned(), 8332),
+    }
+}
+
+fn infer_network_from_port(port: u16) -> String {
+    match port {
+        8332 => "mainnet",
+        18332 => "testnet",
+        38332 => "signet",
+        18443 => "regtest",
+        _ => "regtest",
+    }
+    .to_owned()
+}
+
 #[derive(Debug, Deserialize)]
 struct JsonRpcEnvelope<T> {
     result: Option<T>,
@@ -468,6 +556,14 @@ struct DescriptorInfo {
 #[derive(Debug, Deserialize)]
 struct ImportResult {
     success: bool,
+    #[serde(default)]
+    error: Option<ImportError>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ImportError {
+    #[serde(default)]
+    message: String,
 }
 
 #[derive(Debug, Deserialize)]
