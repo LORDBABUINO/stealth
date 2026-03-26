@@ -27,6 +27,12 @@ Stealth is currently transitioning from a controlled regtest environment to real
 
 The immediate focus is enabling analysis of real wallet data using a local Bitcoin node.
 
+Stealth ships a Rust workspace with:
+
+- `stealth-engine` (analysis engine)
+- `stealth-model` (domain model types and interfaces)
+- `stealth-bitcoincore` (Bitcoin Core RPC gateway adapter)
+
 ## Project Direction
 
 Stealth is evolving into a modular privacy heuristics engine for Bitcoin.
@@ -69,36 +75,59 @@ Stealth identifies real-world privacy issues such as:
 Stealth's source-of-truth detector is:
 
 ```
-backend/script/detect.py
+engine/src/detect.rs
 ```
 
-### Finding types
+The report model and type names are defined in:
 
-| Type                     | Meaning                                         |
-| ------------------------ | ----------------------------------------------- |
-| `ADDRESS_REUSE`          | Address received funds in multiple transactions |
-| `CIOH`                   | Multi-input linkage across co-spent inputs      |
-| `DUST`                   | Dust output detection                           |
-| `DUST_SPENDING`          | Dust inputs linking clusters                    |
-| `CHANGE_DETECTION`       | Identifiable change output                      |
-| `CONSOLIDATION`          | Many-input transaction merging UTXOs            |
-| `SCRIPT_TYPE_MIXING`     | Mixed script types in one spend                 |
-| `CLUSTER_MERGE`          | Previously separate funding chains merged       |
-| `UTXO_AGE_SPREAD`        | Reveals dormancy and timing patterns            |
-| `EXCHANGE_ORIGIN`        | Likely exchange withdrawal origin               |
-| `TAINTED_UTXO_MERGE`     | Tainted inputs propagating risk                 |
-| `BEHAVIORAL_FINGERPRINT` | Consistent identifiable patterns                |
+```
+engine/src/types.rs
+```
+
+### Severity levels
+
+| Level      | Meaning                                                           |
+| ---------- | ----------------------------------------------------------------- |
+| `LOW`      | Weak or contextual signal; monitor behavior                       |
+| `MEDIUM`   | Meaningful privacy leakage under common heuristics                |
+| `HIGH`     | Strong linkage/fingerprinting risk                                |
+| `CRITICAL` | Very strong deanonymization signal requiring immediate mitigation |
+
+## Vulnerabilities detected
+
+Stealth currently runs **12 detectors** in `stealth-engine`.
+
+| #   | Type                     | Default severity | What it indicates                                      |
+| --- | ------------------------ | ---------------- | ------------------------------------------------------ |
+| 1   | `ADDRESS_REUSE`          | HIGH             | Same receive address used across multiple transactions |
+| 2   | `CIOH`                   | HIGH - CRITICAL  | Multi-input ownership linkage                          |
+| 3   | `DUST`                   | MEDIUM - HIGH    | Dust outputs received/spent                            |
+| 4   | `DUST_SPENDING`          | HIGH             | Dust merged with normal inputs                         |
+| 5   | `CHANGE_DETECTION`       | MEDIUM           | Identifiable change output patterns                    |
+| 6   | `CONSOLIDATION`          | MEDIUM           | Consolidation transactions linking clusters            |
+| 7   | `SCRIPT_TYPE_MIXING`     | HIGH             | Mixed script types that fingerprint wallet behavior    |
+| 8   | `CLUSTER_MERGE`          | HIGH             | Previously separate clusters merged on-chain           |
+| 9   | `UTXO_AGE_SPREAD`        | LOW              | Broad age spread revealing timing behavior             |
+| 10  | `EXCHANGE_ORIGIN`        | MEDIUM           | Signals typical of exchange batch withdrawals          |
+| 11  | `TAINTED_UTXO_MERGE`     | HIGH             | Tainted and clean inputs merged                        |
+| 12  | `BEHAVIORAL_FINGERPRINT` | MEDIUM           | Repeating transaction patterns                         |
+| 13  | `DUST_ATTACK`            | CRITICAL         | Coordinated dust-pattern behavior                      |
+| 14  | `PEEL_CHAIN`             | HIGH - CRITICAL  | Repeated peeling flow across hops                      |
+| 15  | `DETERMINISTIC_LINK`     | HIGH             | Deterministic input-output mapping                     |
+| 16  | `UNNECESSARY_INPUT`      | MEDIUM           | Extra inputs increasing CIOH exposure                  |
+| 17  | `TOXIC_CHANGE`           | HIGH             | Toxic change consolidation patterns                    |
 
 ### Warning types
 
-| Type            | Meaning                          |
-| --------------- | -------------------------------- |
-| `DORMANT_UTXOS` | Dormant funds pattern            |
-| `DIRECT_TAINT`  | Direct exposure to risky sources |
+| Type            | Typical severity | Meaning                                         |
+| --------------- | ---------------- | ----------------------------------------------- |
+| `DORMANT_UTXOS` | LOW              | Dormant/hoarded UTXO behavior                   |
+| `DIRECT_TAINT`  | HIGH             | Funds directly received from known risky source |
+| `DETERMINISTIC_LINK` | LOW              | Appears as a low-risk ambiguity signal in some transactions |
 
-## How to use
+## How to use the frontend
 
-1. Open the application
+1. Run and open the application
 2. Paste a wallet descriptor (`wpkh(...)`, `tr(...)`, etc.)
 3. Click **Analyze**
 4. Review:
@@ -183,6 +212,17 @@ yarn dev
 
 ```
 stealth/
+├── Cargo.toml              # Rust workspace definition
+├── engine/                 # stealth-engine (detectors + graph + report model)
+│   ├── src/
+│   │   ├── detect.rs       # privacy detectors
+│   │   ├── engine.rs       # AnalysisEngine entry point
+│   │   ├── graph.rs        # Transaction graph builder
+│   │   └── lib.rs          # Crate root and re-exports
+│   └── tests/
+│       └── integration.rs  # Regtest integration tests
+├── model/                  # stealth-model (domain model types and interfaces)
+├── bitcoincore/            # Bitcoin Core gateway implementation crate
 ├── frontend/              # React + Vite UI
 │   └── src/
 │       ├── components/    # FindingCard, VulnerabilityBadge
@@ -198,6 +238,16 @@ stealth/
 │   │   └── bitcoin-data/  # Regtest chain data (gitignored)
 │   └── src/StealthBackend/ # Quarkus Java REST API (single /api/wallet/scan endpoint)
 └── slides/                # Slidev pitch presentation
+```
+
+### Test Coverage
+
+Stealth test coverage includes end-to-end api tests, integration tests using bitcoind regtest in core/ and additional unit tests.
+
+You may run tests with:
+
+```bash
+cargo test
 ```
 
 ## Privacy notice
