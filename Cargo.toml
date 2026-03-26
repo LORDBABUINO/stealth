@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "model",
+    "bitcoincore",
 ]
 resolver = "2"
 
