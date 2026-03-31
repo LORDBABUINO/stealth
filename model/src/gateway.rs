@@ -202,6 +202,11 @@ pub struct WalletHistory {
     /// Populated by the descriptor scan path; may be empty for wallet scans.
     #[serde(default, with = "serde_addr_set")]
     pub internal_addresses: HashSet<Address<NetworkUnchecked>>,
+    /// Every address derived from ALL wallet descriptors (external + internal).
+    /// Used by `TxGraph` to seed `our_addrs`, matching the Python reference
+    /// which uses `set(addr_map.keys())` over all derived addresses.
+    #[serde(default, with = "serde_addr_set")]
+    pub derived_addresses: HashSet<Address<NetworkUnchecked>>,
 }
 
 /// A participant (input or output) in a transaction, enriched with
