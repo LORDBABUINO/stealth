@@ -64,7 +64,6 @@ struct ScanOpts {
     utxos_file: Option<PathBuf>,
     rpc_url: Option<String>,
     rpc_user: Option<String>,
-    rpc_pass: Option<String>,
     rpc_cookie: Option<PathBuf>,
     format: Option<String>,
 }
@@ -81,9 +80,7 @@ impl ScanOpts {
             self.rpc_user
                 .clone()
                 .or_else(|| env::var("STEALTH_RPC_USER").ok()),
-            self.rpc_pass
-                .clone()
-                .or_else(|| env::var("STEALTH_RPC_PASS").ok()),
+            env::var("STEALTH_RPC_PASS").ok(),
             self.rpc_cookie
                 .clone()
                 .or_else(|| env::var("STEALTH_RPC_COOKIE").ok().map(PathBuf::from)),
@@ -166,9 +163,6 @@ fn parse_scan_args(args: &[String]) -> Result<ScanOpts, String> {
             "--rpc-user" => {
                 opts.rpc_user = Some(take_value(args, &mut i, "--rpc-user")?);
             }
-            "--rpc-pass" => {
-                opts.rpc_pass = Some(take_value(args, &mut i, "--rpc-pass")?);
-            }
             "--rpc-cookie" => {
                 opts.rpc_cookie = Some(PathBuf::from(take_value(args, &mut i, "--rpc-cookie")?));
             }
@@ -244,8 +238,7 @@ fn print_usage() {
     eprintln!("RPC CONNECTION:");
     eprintln!("  --rpc-url <URL>          bitcoind RPC endpoint");
     eprintln!("  --rpc-user <USER>        RPC username");
-    eprintln!("  --rpc-pass <PASS>        RPC password");
-    eprintln!("  --rpc-cookie <PATH>      Path to .cookie file\n");
+    eprintln!("  --rpc-cookie <PATH>      Path to .cookie file (recommended)\n");
     eprintln!("  Env vars: STEALTH_RPC_URL, STEALTH_RPC_USER,");
     eprintln!("            STEALTH_RPC_PASS, STEALTH_RPC_COOKIE\n");
     eprintln!("OUTPUT:");
