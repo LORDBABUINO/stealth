@@ -151,12 +151,11 @@ Stealth currently runs **12 detectors** in `stealth-engine`.
 
 ### Prerequisites
 
-| Dependency     | Version | Purpose         |
-| -------------- | ------- | --------------- |
-| Bitcoin Core   | ≥ 26    | Local node      |
-| Python         | ≥ 3.10  | Analysis engine |
-| Java           | 21      | Backend         |
-| Node.js + yarn | ≥ 18    | Frontend        |
+| Dependency     | Version | Purpose           |
+| -------------- | ------- | ----------------- |
+| Bitcoin Core   | ≥ 26    | Local node        |
+| Rust toolchain | ≥ 1.56  | CLI + engine      |
+| Node.js + yarn | ≥ 18    | Frontend          |
 
 ### 1. Clone the repository
 
@@ -168,75 +167,30 @@ cargo build
 
 ### 2. Configure Bitcoin Core RPC (regtest)
 
-Create a local `bitcoin.conf`:
+Copy the example config:
 
 ```bash
-cat > bitcoin.conf <<'EOF'
-regtest=1
-server=1
-daemon=1
-txindex=1
-listen=0
-[regtest]
-rpcbind=127.0.0.1
-rpcallowip=127.0.0.1
-rpcuser=localuser
-rpcpassword=localpass
-rpcport=18443
-fallbackfee=0.0002
-EOF
+cp bitcoin.conf.example bitcoin.conf
 ```
 
-### 3. Start Bitcoin Core
-
-Regtest example:
+### 3. Start regtest and fund a wallet
 
 ```bash
-mkdir -p "$PWD/.bitcoin-regtest"
-bitcoind -datadir="$PWD/.bitcoin-regtest" -conf="$PWD/bitcoin.conf" -daemon
+./scripts/setup.sh
 ```
 
-Mainnet example:
+This starts `bitcoind` in regtest mode, creates a wallet, mines initial blocks,
+and prints the descriptor and a ready-to-use `stealth-cli` command.
+
+Use `./scripts/setup.sh --fresh` to wipe the chain and start from genesis.
+
+### 4. Run a CLI scan
 
 ```bash
-bitcoind -daemon
-```
-
-### 4. Run a usable CLI scan request
-
-```bash
-DATADIR="$PWD/.bitcoin-regtest"
-CONF="$PWD/bitcoin.conf"
-RPC="bitcoin-cli -datadir=$DATADIR -conf=$CONF -regtest -rpcport=18443"
-
-mkdir -p "$DATADIR"
-if ! $RPC getblockchaininfo >/dev/null 2>&1; then
-  bitcoind -datadir="$DATADIR" -conf="$CONF" -daemon
-fi
-
-for _ in $(seq 1 100); do
-  if $RPC getblockchaininfo >/dev/null 2>&1; then
-    break
-  fi
-  sleep 0.2
-done
-
-WALLET="scanwallet_cli"
-if ! $RPC -rpcwallet="$WALLET" getwalletinfo >/dev/null 2>&1; then
-  $RPC loadwallet "$WALLET" >/dev/null 2>&1 || $RPC createwallet "$WALLET" >/dev/null
-fi
-
-DESC="$($RPC -rpcwallet="$WALLET" listdescriptors | \
-  python3 -c 'import json,sys; d=json.load(sys.stdin)["descriptors"]; print(next(x["desc"] for x in d if x.get("active") and not x.get("internal") and "/0/*" in x["desc"]))')"
-TARGET_ADDR="$($RPC deriveaddresses "$DESC" "[0,0]" | \
-  python3 -c 'import json,sys; print(json.load(sys.stdin)[0])')"
-$RPC generatetoaddress 101 "$TARGET_ADDR" >/dev/null
-
 cargo run --bin stealth-cli -- scan \
-  --descriptor "$DESC" \
+  --descriptor '<descriptor from setup.sh output>' \
   --rpc-url http://127.0.0.1:18443 \
-  --rpc-user localuser \
-  --rpc-pass localpass \
+  --rpc-cookie .bitcoin-regtest/regtest/.cookie \
   --format text
 ```
 
@@ -278,6 +232,7 @@ stealth/
 │   │   └── bitcoin-data/  # Regtest chain data (gitignored)
 │   └── src/StealthBackend/ # Quarkus Java REST API (single /api/wallet/scan endpoint)
 ├── cli/                   # stealth-cli
+├── scripts/               # Development helper scripts (setup.sh)
 └── target/                # Cargo build outputs
 ```
 
