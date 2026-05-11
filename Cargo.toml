@@ -4,6 +4,7 @@ members = [
     "bitcoincore",
     "engine",
     "api",
+    "cli",
 ]
 resolver = "2"
 

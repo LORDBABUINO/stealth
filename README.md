@@ -32,6 +32,7 @@ Stealth ships a Rust workspace with:
 - `stealth-engine` (analysis engine)
 - `stealth-model` (domain model types and interfaces)
 - `stealth-api` (http api)
+- `stealth-cli` (command-line interface)
 - `stealth-bitcoincore` (Bitcoin Core RPC gateway adapter)
 
 ## Project Direction
@@ -151,12 +152,11 @@ Stealth currently runs **12 detectors** in `stealth-engine`.
 
 ### Prerequisites
 
-| Dependency     | Version | Purpose         |
-| -------------- | ------- | --------------- |
-| Bitcoin Core   | ≥ 26    | Local node      |
-| Python         | ≥ 3.10  | Analysis engine |
-| Java           | 21      | Backend         |
-| Node.js + yarn | ≥ 18    | Frontend        |
+| Dependency     | Version | Purpose           |
+| -------------- | ------- | ----------------- |
+| Bitcoin Core   | ≥ 26    | Local node        |
+| Rust toolchain | ≥ 1.56  | CLI + engine      |
+| Node.js + yarn | ≥ 18    | Frontend          |
 
 ### 1. Clone the repository
 
@@ -253,7 +253,18 @@ curl -s "http://127.0.0.1:$API_PORT/api/wallet/scan"   -H 'content-type: applica
 $RPC stop
 ```
 
-### 6. Start frontend
+### 6. Alternative: CLI scan
+
+```bash
+./scripts/setup.sh
+cargo run --bin stealth-cli -- scan \
+  --descriptor '<descriptor from setup.sh output>' \
+  --rpc-url http://127.0.0.1:18443 \
+  --rpc-cookie .bitcoin-regtest/regtest/.cookie \
+  --format text
+```
+
+### 5. Start frontend
 
 ```bash
 cd frontend
@@ -290,11 +301,13 @@ stealth/
 │   │   ├── config.ini     # Connection config (datadir, network)
 │   │   └── bitcoin-data/  # Regtest chain data (gitignored)
 │   └── src/StealthBackend/ # Quarkus Java REST API (single /api/wallet/scan endpoint)
-└── slides/                # Slidev pitch presentation
-├── api/                    # stealth-api (Axum HTTP layer)
+├── slides/                # Slidev pitch presentation
+├── api/                   # stealth-api (Axum HTTP layer)
 │   ├── src/
 │   └── tests/
-└── target/                 # Cargo build outputs
+├── cli/                   # stealth-cli
+├── scripts/               # Development helper scripts (setup.sh)
+└── target/                # Cargo build outputs
 ```
 
 ### Test Coverage
