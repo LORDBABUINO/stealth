@@ -19,6 +19,7 @@ stealth-bitcoincore = { path = "../bitcoincore" }
 stealth-engine = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
+tower-http = { version = "0.6.6", features = ["cors"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 

@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use axum::Router;
 use stealth_engine::gateway::BlockchainGateway;
+use tower_http::cors::CorsLayer;
 
 /// Shared application state: an optional blockchain gateway.
 pub type GatewayState = Option<Arc<dyn BlockchainGateway + Send + Sync>>;
@@ -19,5 +20,6 @@ pub fn app() -> Router {
 pub fn app_with_gateway(gateway: GatewayState) -> Router {
     Router::new()
         .nest("/api/wallet", routes::wallet::router())
+        .layer(CorsLayer::permissive())
         .with_state(gateway)
 }
