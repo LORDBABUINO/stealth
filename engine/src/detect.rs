@@ -35,7 +35,9 @@ impl TxGraph {
         self.detect_exchange_origin(thresholds, &mut findings, known_exchange_txids);
         self.detect_tainted_utxos(&mut findings, &mut warnings, known_risky_txids);
         self.detect_behavioral_fingerprint(&mut findings);
-        self.detect_dust_attack(&mut findings);
+        // Dust-attack detection is folded into `detect_dust`, which
+        // escalates Dust findings whose parent tx matches the attack
+        // pattern (see commit 2 of PR #19 review).
         self.detect_peel_chain(&mut findings);
         self.detect_deterministic_links(&mut findings, &mut warnings);
         self.detect_unnecessary_input(&mut findings);
@@ -156,6 +158,12 @@ impl TxGraph {
     }
 
     // ── 3. Dust UTXO Detection ─────────────────────────────────────────────
+    //
+    // Also detects the dust-attack pattern (formerly Detector 13). Every
+    // dust-attack output is by definition a dust UTXO, so the two
+    // detectors fire on the same data — we collapse them by escalating
+    // severity and attaching attack evidence to the existing Dust finding
+    // when the parent transaction matches the attack signature.
 
     fn detect_dust(&self, thresholds: &DetectorThresholds, findings: &mut Vec<Finding>) {
         let dust = thresholds.dust;
@@ -173,34 +181,58 @@ impl TxGraph {
                 } else {
                     "dust-class"
                 };
-                let severity = if amt <= strict_dust {
+                let base_severity = if amt <= strict_dust {
                     Severity::High
                 } else {
                     Severity::Medium
                 };
-                findings.push(Finding {
-                    vulnerability_type: VulnerabilityType::Dust,
-                    severity,
-                    description: format!(
+                let attack = self.dust_attack_evidence(&utxo.txid, thresholds);
+                let severity = if attack.is_some() {
+                    Severity::Critical
+                } else {
+                    base_severity
+                };
+                let mut details = json!({
+                    "status": "unspent",
+                    "address": utxo.address.assume_checked_ref().to_string(),
+                    "sats": amt.to_sat(),
+                    "label": label,
+                    "txid": utxo.txid,
+                    "vout": utxo.vout,
+                });
+                if let Some(ev) = attack.as_ref() {
+                    details["dust_attack"] = ev.clone();
+                }
+                let description = if attack.is_some() {
+                    format!(
+                        "Dust UTXO at {} ({} sats, {}, unspent) — parent TX {} matches a dust-attack pattern",
+                        utxo.address.assume_checked_ref(),
+                        amt.to_sat(),
+                        label,
+                        utxo.txid,
+                    )
+                } else {
+                    format!(
                         "Dust UTXO at {} ({} sats, {}, unspent)",
                         utxo.address.assume_checked_ref(),
                         amt.to_sat(),
-                        label
-                    ),
-                    details: Some(json!({
-                        "status": "unspent",
-                        "address": utxo.address.assume_checked_ref().to_string(),
-                        "sats": amt.to_sat(),
-                        "label": label,
-                        "txid": utxo.txid,
-                        "vout": utxo.vout,
-                    })),
-                    correction: Some(
-                        "Do not spend this dust output — doing so links your other inputs \
-                         to this address via CIOH. Use your wallet's coin freeze feature to \
-                         exclude it from future transactions."
-                            .into(),
-                    ),
+                        label,
+                    )
+                };
+                let correction = if attack.is_some() {
+                    "Do NOT spend this dust UTXO — spending it reveals your other UTXOs \
+                     via common-input-ownership. Freeze it in your wallet immediately."
+                } else {
+                    "Do not spend this dust output — doing so links your other inputs \
+                     to this address via CIOH. Use your wallet's coin freeze feature to \
+                     exclude it from future transactions."
+                };
+                findings.push(Finding {
+                    vulnerability_type: VulnerabilityType::Dust,
+                    severity,
+                    description,
+                    details: Some(details),
+                    correction: Some(correction.into()),
                 });
             }
         }
@@ -220,20 +252,40 @@ impl TxGraph {
                 if amt <= dust && self.is_ours(&out.address) {
                     let key = (*txid, out.address.assume_checked_ref().to_string());
                     if !current_keys.contains(&key) && seen.insert(key) {
-                        findings.push(Finding {
-                            vulnerability_type: VulnerabilityType::Dust,
-                            severity: Severity::Low,
-                            description: format!(
+                        let attack = self.dust_attack_evidence(txid, thresholds);
+                        let severity = if attack.is_some() {
+                            Severity::Critical
+                        } else {
+                            Severity::Low
+                        };
+                        let mut details = json!({
+                            "status": "spent",
+                            "address": out.address.assume_checked_ref().to_string(),
+                            "sats": amt.to_sat(),
+                            "txid": txid,
+                        });
+                        if let Some(ev) = attack.as_ref() {
+                            details["dust_attack"] = ev.clone();
+                        }
+                        let description = if attack.is_some() {
+                            format!(
+                                "Historical dust output at {} ({} sats, already spent) — parent TX {} matches a dust-attack pattern",
+                                out.address.assume_checked_ref(),
+                                amt.to_sat(),
+                                txid,
+                            )
+                        } else {
+                            format!(
                                 "Historical dust output at {} ({} sats, already spent)",
                                 out.address.assume_checked_ref(),
-                                amt.to_sat()
-                            ),
-                            details: Some(json!({
-                                "status": "spent",
-                                "address": out.address.assume_checked_ref().to_string(),
-                                "sats": amt.to_sat(),
-                                "txid": txid,
-                            })),
+                                amt.to_sat(),
+                            )
+                        };
+                        findings.push(Finding {
+                            vulnerability_type: VulnerabilityType::Dust,
+                            severity,
+                            description,
+                            details: Some(details),
                             correction: Some(
                                 "This dust has already been spent. Going forward, reject \
                                  unsolicited dust by enabling automatic dust rejection."
@@ -244,6 +296,54 @@ impl TxGraph {
                 }
             }
         }
+    }
+
+    /// If `parent_txid` matches the dust-attack signature (many outputs,
+    /// many dust outputs, high address diversity, and not one of our own
+    /// sends), return a JSON evidence blob suitable for attaching to a
+    /// Dust finding; otherwise return `None`.
+    fn dust_attack_evidence(
+        &self,
+        parent_txid: &Txid,
+        thresholds: &DetectorThresholds,
+    ) -> Option<serde_json::Value> {
+        let min_outputs = thresholds.dust_attack_min_outputs;
+        let min_dust_outputs = thresholds.dust_attack_min_dust_outputs;
+        let dust_threshold = thresholds.strict_dust;
+
+        // Dust-attack txs are received, not sent — skip our own sends.
+        let inputs = self.get_input_addresses(parent_txid);
+        if inputs.iter().any(|ia| self.is_ours(&ia.address)) {
+            return None;
+        }
+
+        let outputs = self.get_output_addresses(parent_txid);
+        if outputs.len() < min_outputs {
+            return None;
+        }
+        let dust_outputs: Vec<_> = outputs
+            .iter()
+            .filter(|o| o.value <= dust_threshold)
+            .collect();
+        if dust_outputs.len() < min_dust_outputs {
+            return None;
+        }
+        let unique_addrs: HashSet<String> = outputs
+            .iter()
+            .map(|o| o.address.assume_checked_ref().to_string())
+            .collect();
+        let diversity = unique_addrs.len() as f64 / outputs.len() as f64;
+        if diversity < 0.8 {
+            return None;
+        }
+
+        Some(json!({
+            "parent_txid": parent_txid.to_string(),
+            "total_outputs": outputs.len(),
+            "dust_outputs": dust_outputs.len(),
+            "unique_addresses": unique_addrs.len(),
+            "diversity_ratio": (diversity * 100.0).round() as u32,
+        }))
     }
 
     // ── 4. Dust Spent with Normal Inputs ───────────────────────────────────
@@ -1010,93 +1110,6 @@ impl TxGraph {
                     .into(),
             ),
         });
-    }
-
-    // ── 13. Dust Attack Detection ──────────────────────────────────────────
-    //
-    // Port of: am-i-exposed/src/lib/analysis/chain/backward.ts
-    //
-    // Detects when our wallet received a tiny UTXO from a probable dust
-    // attack transaction. A dust attack parent typically has ≥10 outputs,
-    // ≥5 of which are ≤ 546 sats, distributed to many distinct addresses.
-
-    fn detect_dust_attack(&self, findings: &mut Vec<Finding>) {
-        const MIN_OUTPUTS: usize = 10;
-        const DUST_THRESHOLD: u64 = 546;
-        const MIN_DUST_OUTPUTS: usize = 5;
-
-        // Check receiving transactions only (we didn't create them).
-        let txids: Vec<Txid> = self.our_txids.iter().copied().collect();
-        for txid in txids {
-            let input_addrs = self.get_input_addresses(&txid);
-            let has_our_inputs = input_addrs.iter().any(|ia| self.is_ours(&ia.address));
-            if has_our_inputs {
-                continue; // Skip our own sends
-            }
-
-            let outputs = self.get_output_addresses(&txid);
-            if outputs.len() < MIN_OUTPUTS {
-                continue;
-            }
-
-            let dust_outputs: Vec<_> = outputs
-                .iter()
-                .filter(|o| o.value.to_sat() <= DUST_THRESHOLD)
-                .collect();
-            if dust_outputs.len() < MIN_DUST_OUTPUTS {
-                continue;
-            }
-
-            let unique_addrs: HashSet<String> = outputs
-                .iter()
-                .map(|o| o.address.assume_checked_ref().to_string())
-                .collect();
-            let diversity = unique_addrs.len() as f64 / outputs.len() as f64;
-            if diversity < 0.8 {
-                continue;
-            }
-
-            // Our wallet received from this dust attack tx
-            let our_outs: Vec<_> = outputs
-                .iter()
-                .filter(|o| self.is_ours(&o.address))
-                .collect();
-            if our_outs.is_empty() {
-                continue;
-            }
-
-            findings.push(Finding {
-                vulnerability_type: VulnerabilityType::DustAttack,
-                severity: Severity::Critical,
-                description: format!(
-                    "TX {} is a likely dust attack: {} outputs, {} of which are ≤{} sats, \
-                     targeting {} unique addresses",
-                    txid,
-                    outputs.len(),
-                    dust_outputs.len(),
-                    DUST_THRESHOLD,
-                    unique_addrs.len()
-                ),
-                details: Some(json!({
-                    "txid": txid.to_string(),
-                    "total_outputs": outputs.len(),
-                    "dust_outputs": dust_outputs.len(),
-                    "unique_addresses": unique_addrs.len(),
-                    "diversity_ratio": (diversity * 100.0).round() as u32,
-                    "our_received": our_outs.iter().map(|o| {
-                        json!({
-                            "address": o.address.assume_checked_ref().to_string(),
-                            "sats": o.value.to_sat()
-                        })
-                    }).collect::<Vec<_>>(),
-                })),
-                correction: Some(
-                    "Do NOT spend this dust UTXO — spending it reveals your other UTXOs \
-                     via common-input-ownership. Freeze it in your wallet immediately."
-                        .into(),
-                ),
-            });
-        }
     }
 
     // ── 14. Peel Chain Detection ───────────────────────────────────────────

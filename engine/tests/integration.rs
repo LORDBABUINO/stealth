@@ -715,6 +715,11 @@ fn full_report_generates() {
 }
 
 // ─── 13. Dust Attack Detection ─────────────────────────────────────────────
+//
+// Dust-attack detection is folded into the Dust detector: when a dust
+// UTXO's parent transaction matches the attack signature, the existing
+// Dust finding is escalated to `Critical` and carries a `dust_attack`
+// evidence object inside `details`.
 
 #[test]
 fn detect_dust_attack() {
@@ -781,7 +786,30 @@ fn detect_dust_attack() {
 
     let gateway = gateway_for(&node);
     let report = scan_wallet(&gateway, "alice");
-    assert!(has_finding(&report, VulnerabilityType::DustAttack));
+
+    // The dust outputs are flagged as Dust, and at least one Dust
+    // finding carries dust-attack evidence with Critical severity.
+    let dust_findings: Vec<_> = report
+        .findings
+        .iter()
+        .filter(|f| f.vulnerability_type == VulnerabilityType::Dust)
+        .collect();
+    assert!(
+        !dust_findings.is_empty(),
+        "expected at least one Dust finding from the attack outputs"
+    );
+    let escalated = dust_findings.iter().any(|f| {
+        f.severity == stealth_engine::Severity::Critical
+            && f.details
+                .as_ref()
+                .and_then(|d| d.get("dust_attack"))
+                .is_some()
+    });
+    assert!(
+        escalated,
+        "expected at least one Dust finding to carry dust_attack evidence: {:?}",
+        dust_findings
+    );
 }
 
 // ─── 14. Peel Chain Detection ──────────────────────────────────────────────
