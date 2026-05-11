@@ -1173,13 +1173,10 @@ impl TxGraph {
 
             while hops < max_hops {
                 // Find the child transaction that spends trace_txid:trace_vout
-                let child_txid = match self
-                    .spending_index
-                    .get(&(trace_txid, trace_vout))
-                    .copied()
-                {
-                    Some(t) => t,
-                    None => break,
+                let Some(child_txid) =
+                    self.spending_index.get(&(trace_txid, trace_vout)).copied()
+                else {
+                    break;
                 };
                 let child_outs = self.get_output_addresses(&child_txid);
                 if child_outs.len() != 2 {
