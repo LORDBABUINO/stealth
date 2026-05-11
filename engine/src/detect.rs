@@ -38,10 +38,10 @@ impl TxGraph {
         // Dust-attack detection is folded into `detect_dust`, which
         // escalates Dust findings whose parent tx matches the attack
         // pattern (see commit 2 of PR #19 review).
-        self.detect_peel_chain(&mut findings);
-        self.detect_deterministic_links(&mut findings, &mut warnings);
+        self.detect_peel_chain(thresholds, &mut findings);
+        self.detect_deterministic_links(thresholds, &mut findings, &mut warnings);
         self.detect_unnecessary_input(&mut findings);
-        self.detect_toxic_change(&mut findings);
+        self.detect_toxic_change(thresholds, &mut findings);
 
         let stats = Stats {
             transactions_analyzed: self.our_txids.len(),
@@ -310,6 +310,7 @@ impl TxGraph {
         let min_outputs = thresholds.dust_attack_min_outputs;
         let min_dust_outputs = thresholds.dust_attack_min_dust_outputs;
         let dust_threshold = thresholds.strict_dust;
+        let min_diversity = thresholds.dust_attack_diversity;
 
         // Dust-attack txs are received, not sent — skip our own sends.
         let inputs = self.get_input_addresses(parent_txid);
@@ -333,7 +334,7 @@ impl TxGraph {
             .map(|o| o.address.assume_checked_ref().to_string())
             .collect();
         let diversity = unique_addrs.len() as f64 / outputs.len() as f64;
-        if diversity < 0.8 {
+        if diversity < min_diversity {
             return None;
         }
 
@@ -1122,7 +1123,12 @@ impl TxGraph {
     // the next hop. Signature: 1-2 inputs, 2 outputs with highly
     // asymmetric values (ratio < 0.3).
 
-    fn detect_peel_chain(&self, findings: &mut Vec<Finding>) {
+    fn detect_peel_chain(&self, thresholds: &DetectorThresholds, findings: &mut Vec<Finding>) {
+        let ratio_cutoff = thresholds.peel_chain_ratio;
+        let max_hops = thresholds.peel_chain_max_hops;
+        let min_hops = thresholds.peel_chain_min_hops;
+        let critical_hops = thresholds.peel_chain_critical_hops;
+
         let txids: Vec<Txid> = self.our_txids.iter().copied().collect();
         for txid in txids {
             let input_addrs = self.get_input_addresses(&txid);
@@ -1150,7 +1156,7 @@ impl TxGraph {
                 continue;
             }
             let ratio = small as f64 / large as f64;
-            if ratio >= 0.3 {
+            if ratio >= ratio_cutoff {
                 continue; // Outputs are too similar for a peel
             }
 
@@ -1164,7 +1170,6 @@ impl TxGraph {
             };
             let mut trace_txid = txid;
             let mut trace_vout = outputs[large_idx].index;
-            let max_hops = 6;
 
             while hops < max_hops {
                 // Find the child transaction that spends trace_txid:trace_vout
@@ -1182,7 +1187,7 @@ impl TxGraph {
                 }
                 let mut cv: Vec<u64> = child_outs.iter().map(|o| o.value.to_sat()).collect();
                 cv.sort_unstable();
-                if cv[1] == 0 || cv[0] as f64 / cv[1] as f64 >= 0.3 {
+                if cv[1] == 0 || cv[0] as f64 / cv[1] as f64 >= ratio_cutoff {
                     break;
                 }
                 hops += 1;
@@ -1195,11 +1200,11 @@ impl TxGraph {
                 trace_vout = child_outs[large_child].index;
             }
 
-            if hops < 2 {
-                continue; // At least 2 hops to qualify
+            if hops < min_hops {
+                continue; // At least `min_hops` to qualify
             }
 
-            let severity = if hops >= 4 {
+            let severity = if hops >= critical_hops {
                 Severity::Critical
             } else {
                 Severity::High
@@ -1236,7 +1241,13 @@ impl TxGraph {
     // where a specific input can only map to one specific output (or
     // vice versa). This indicates zero ambiguity for that link.
 
-    fn detect_deterministic_links(&self, findings: &mut Vec<Finding>, warnings: &mut Vec<Finding>) {
+    fn detect_deterministic_links(
+        &self,
+        thresholds: &DetectorThresholds,
+        findings: &mut Vec<Finding>,
+        warnings: &mut Vec<Finding>,
+    ) {
+        let low_ambiguity_cutoff = thresholds.low_ambiguity_cutoff;
         let txids: Vec<Txid> = self.our_txids.iter().copied().collect();
         for txid in txids {
             let inputs = self.get_input_addresses(&txid);
@@ -1350,7 +1361,7 @@ impl TxGraph {
                             .into(),
                     ),
                 });
-            } else if ambiguity > 0.0 && ambiguity < 0.4 {
+            } else if ambiguity > 0.0 && ambiguity < low_ambiguity_cutoff {
                 // No fully deterministic link, but ambiguity is low —
                 // an analyst can guess the input→output mapping with
                 // high confidence. Surface this as a warning (warnings
@@ -1473,9 +1484,9 @@ impl TxGraph {
     // reveals the connection between the payment transaction and the
     // user's larger holdings.
 
-    fn detect_toxic_change(&self, findings: &mut Vec<Finding>) {
-        const TOXIC_UPPER: u64 = 10_000;
-        const DUST_LOWER: u64 = 546;
+    fn detect_toxic_change(&self, thresholds: &DetectorThresholds, findings: &mut Vec<Finding>) {
+        let toxic_lower = thresholds.toxic_change_lower;
+        let toxic_upper = thresholds.toxic_change_upper;
 
         let txids: Vec<Txid> = self.our_txids.iter().copied().collect();
         for txid in txids {
@@ -1494,10 +1505,10 @@ impl TxGraph {
                 if !self.is_ours(&out.address) {
                     continue;
                 }
-                let sats = out.value.to_sat();
-                if !(DUST_LOWER..=TOXIC_UPPER).contains(&sats) {
+                if !(toxic_lower..=toxic_upper).contains(&out.value) {
                     continue;
                 }
+                let sats = out.value.to_sat();
 
                 // Check if this toxic change was later spent alongside
                 // a larger UTXO (the dangerous consolidation).
@@ -1515,7 +1526,7 @@ impl TxGraph {
                 }
                 let has_larger = child_inputs
                     .iter()
-                    .any(|ci| ci.value.to_sat() > TOXIC_UPPER && self.is_ours(&ci.address));
+                    .any(|ci| ci.value > toxic_upper && self.is_ours(&ci.address));
                 if !has_larger {
                     continue;
                 }
