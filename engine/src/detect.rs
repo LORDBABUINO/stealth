@@ -1350,12 +1350,18 @@ impl TxGraph {
                             .into(),
                     ),
                 });
-            } else if ambiguity >= 0.6 {
+            } else if ambiguity > 0.0 && ambiguity < 0.4 {
+                // No fully deterministic link, but ambiguity is low —
+                // an analyst can guess the input→output mapping with
+                // high confidence. Surface this as a warning (warnings
+                // flag risks, not good privacy). High-ambiguity
+                // transactions emit nothing.
                 warnings.push(Finding {
                     vulnerability_type: VulnerabilityType::DeterministicLink,
                     severity: Severity::Low,
                     description: format!(
-                        "TX {} has good ambiguity ({:.0}%, {} valid interpretations)",
+                        "TX {} has low ambiguity ({:.0}%, {} valid interpretations) — \
+                         input→output mapping is largely guessable",
                         txid,
                         ambiguity * 100.0,
                         total_valid
@@ -1365,7 +1371,11 @@ impl TxGraph {
                         "total_valid_interpretations": total_valid,
                         "ambiguity_pct": (ambiguity * 100.0).round() as u32,
                     })),
-                    correction: None,
+                    correction: Some(
+                        "Use CoinJoin or PayJoin to add valid alternative \
+                         input→output assignments and raise the ambiguity."
+                            .into(),
+                    ),
                 });
             }
         }
