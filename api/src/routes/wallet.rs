@@ -4,7 +4,6 @@ use stealth_engine::engine::{AnalysisEngine, EngineSettings, ScanTarget, UtxoInp
 use stealth_engine::Report;
 
 use crate::error::ApiError;
-use crate::preflight::validate;
 use crate::GatewayState;
 
 pub fn router() -> Router<GatewayState> {
@@ -26,7 +25,6 @@ async fn scan_post(
     Json(body): Json<ScanRequestBody>,
 ) -> Result<Json<Report>, ApiError> {
     let target = body.into_scan_target()?;
-    let target = validate(target)?;
 
     let gw = gateway.ok_or(ApiError::ScannerNotConfigured)?;
     let report = tokio::task::spawn_blocking(move || {
@@ -148,25 +146,6 @@ mod tests {
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
         let body = read_json(response).await;
         assert_eq!(body["error"]["code"], "scanner_not_configured");
-    }
-
-    #[tokio::test]
-    async fn post_scan_rejects_invalid_descriptor() {
-        let response = app()
-            .oneshot(
-                Request::builder()
-                    .uri("/api/wallet/scan")
-                    .method("POST")
-                    .header("content-type", "application/json")
-                    .body(Body::from(json!({ "descriptor": "" }).to_string()))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        let body = read_json(response).await;
-        assert_eq!(body["error"]["code"], "invalid_scan_input");
     }
 
     async fn read_json(response: axum::response::Response) -> Value {

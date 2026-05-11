@@ -55,26 +55,6 @@ async fn scan_post_with_valid_descriptor_returns_503_without_rpc() {
 }
 
 #[tokio::test]
-async fn scan_post_with_invalid_descriptor_returns_bad_request() {
-    let server = TestServer::spawn().await;
-    let client = reqwest::Client::new();
-
-    let response = client
-        .post(server.url("/api/wallet/scan"))
-        .json(&json!({
-            "descriptor": "123"
-        }))
-        .send()
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-    let body: serde_json::Value = response.json().await.unwrap();
-    assert_eq!(body["error"]["code"], "invalid_scan_input");
-    server.stop().await;
-}
-
-#[tokio::test]
 async fn scan_post_with_descriptors_returns_503_without_rpc() {
     let server = TestServer::spawn().await;
     let client = reqwest::Client::new();

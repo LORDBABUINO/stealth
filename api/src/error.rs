@@ -6,15 +6,12 @@ use axum::{
 use serde::Serialize;
 use thiserror::Error;
 
-use crate::preflight::ValidationError;
 use stealth_engine::error::AnalysisError;
 
 #[derive(Debug, Error)]
 pub enum ApiError {
     #[error("{0}")]
     BadRequest(String),
-    #[error("validation failed: {0}")]
-    Validation(#[from] ValidationError),
     #[error("analysis failed: {0}")]
     Analysis(#[from] AnalysisError),
     #[error("scanner not configured – set STEALTH_RPC_URL")]
@@ -30,7 +27,7 @@ impl ApiError {
 
     fn status_code(&self) -> StatusCode {
         match self {
-            Self::BadRequest(_) | Self::Validation(_) => StatusCode::BAD_REQUEST,
+            Self::BadRequest(_) => StatusCode::BAD_REQUEST,
             Self::Analysis(AnalysisError::EmptyDescriptor)
             | Self::Analysis(AnalysisError::DescriptorNormalization { .. }) => {
                 StatusCode::BAD_REQUEST
@@ -45,7 +42,6 @@ impl ApiError {
     fn error_code(&self) -> &'static str {
         match self {
             Self::BadRequest(_) => "bad_request",
-            Self::Validation(_) => "invalid_scan_input",
             Self::Analysis(_) => "scan_failed",
             Self::ScannerNotConfigured => "scanner_not_configured",
             Self::Internal(_) => "internal_error",

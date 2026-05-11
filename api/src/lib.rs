@@ -1,5 +1,4 @@
 mod error;
-mod preflight;
 mod routes;
 
 use std::sync::Arc;
