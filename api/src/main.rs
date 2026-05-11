@@ -139,11 +139,6 @@ fn detect_cookie_file(url: &str) -> Option<PathBuf> {
         .map(|(_, port)| port)
         .unwrap_or(8332);
 
-    for candidate in cookie_candidates(&bitcoin_dir, port) {
-        if candidate.exists() {
-            return Some(candidate);
-        }
-    }
     cookie_candidates(&bitcoin_dir, port)
         .into_iter()
         .find(|candidate| candidate.exists())
