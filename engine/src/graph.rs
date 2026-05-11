@@ -31,6 +31,10 @@ pub struct TxGraph {
     pub input_cache: HashMap<Txid, Vec<InputInfo>>,
     /// Cached output addresses per txid.
     pub output_cache: HashMap<Txid, Vec<OutputInfo>>,
+    /// Reverse spending index: maps `(parent_txid, vout)` → child txid
+    /// that spends that output. Built once from `input_cache` so child
+    /// lookups during detection are O(1) instead of O(N·M).
+    pub spending_index: HashMap<(Txid, u32), Txid>,
 }
 
 /// A UTXO entry from `listunspent`.
@@ -154,9 +158,15 @@ impl TxGraph {
         let mut tx_cache = HashMap::new();
         let mut input_cache: HashMap<Txid, Vec<InputInfo>> = HashMap::new();
         let mut output_cache: HashMap<Txid, Vec<OutputInfo>> = HashMap::new();
+        let mut spending_index: HashMap<(Txid, u32), Txid> = HashMap::new();
 
         for (txid, tx) in &history.transactions {
             tx_cache.insert(*txid, tx.clone());
+
+            // Only index spends made by transactions that touch the wallet.
+            // This mirrors the previous `find_spending_tx` behaviour, which
+            // searched `our_txids` exclusively.
+            let txid_is_ours = our_txids.contains(txid);
 
             let inputs: Vec<InputInfo> = tx
                 .vin
@@ -164,6 +174,14 @@ impl TxGraph {
                 .filter_map(|input| {
                     if input.coinbase {
                         return None;
+                    }
+                    // Reverse spending index — populated during the same
+                    // pass we already make over every input.
+                    if txid_is_ours {
+                        spending_index.insert(
+                            (input.previous_txid, input.previous_vout),
+                            *txid,
+                        );
                     }
                     let parent = history.transactions.get(&input.previous_txid)?;
                     let out = parent.vout.iter().find(|o| o.n == input.previous_vout)?;
@@ -204,6 +222,7 @@ impl TxGraph {
             tx_cache,
             input_cache,
             output_cache,
+            spending_index,
         }
     }
 }

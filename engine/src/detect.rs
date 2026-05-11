@@ -1155,8 +1155,11 @@ impl TxGraph {
 
             while hops < max_hops {
                 // Find the child transaction that spends trace_txid:trace_vout
-                let child_txid = self.find_spending_tx(&trace_txid, trace_vout);
-                let child_txid = match child_txid {
+                let child_txid = match self
+                    .spending_index
+                    .get(&(trace_txid, trace_vout))
+                    .copied()
+                {
                     Some(t) => t,
                     None => break,
                 };
@@ -1475,8 +1478,11 @@ impl TxGraph {
 
                 // Check if this toxic change was later spent alongside
                 // a larger UTXO (the dangerous consolidation).
-                let child_txid = self.find_spending_tx(&txid, out.index);
-                let child_txid = match child_txid {
+                let child_txid = match self
+                    .spending_index
+                    .get(&(txid, out.index))
+                    .copied()
+                {
                     Some(t) => t,
                     None => continue,
                 };
@@ -1517,17 +1523,4 @@ impl TxGraph {
         }
     }
 
-    fn find_spending_tx(&self, source_txid: &Txid, source_vout: u32) -> Option<Txid> {
-        for txid in &self.our_txids {
-            if let Some(tx) = self.fetch_tx(txid) {
-                let spends_outpoint = tx.vin.iter().any(|vin| {
-                    vin.previous_txid == *source_txid && vin.previous_vout == source_vout
-                });
-                if spends_outpoint {
-                    return Some(*txid);
-                }
-            }
-        }
-        None
-    }
 }
