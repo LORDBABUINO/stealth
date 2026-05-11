@@ -13,6 +13,7 @@ readme = "README.md"
 
 [dependencies]
 axum = { workspace = true }
+ini = { package = "rust-ini", version = "0.21.3" }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 stealth-bitcoincore = { path = "../bitcoincore" }

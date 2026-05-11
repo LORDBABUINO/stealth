@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
+use ini::Ini;
 use stealth_api::app_with_gateway;
 use stealth_bitcoincore::{read_cookie_file, BitcoinCoreRpc};
 use stealth_engine::gateway::BlockchainGateway;
@@ -165,40 +166,9 @@ fn cookie_candidates(bitcoin_dir: &Path, port: u16) -> Vec<PathBuf> {
 }
 
 fn read_bitcoin_conf_credentials() -> Option<(String, String)> {
-    let conf_path = PathBuf::from("bitcoin.conf");
-    let conf = std::fs::read_to_string(conf_path).ok()?;
-
-    let mut user: Option<String> = None;
-    let mut pass: Option<String> = None;
-
-    for raw_line in conf.lines() {
-        let line = raw_line.trim();
-        if line.is_empty()
-            || line.starts_with('#')
-            || line.starts_with(';')
-            || line.starts_with('[')
-        {
-            continue;
-        }
-
-        let Some((raw_key, raw_value)) = line.split_once('=') else {
-            continue;
-        };
-        let key = raw_key.trim();
-        let value = raw_value.trim();
-        if value.is_empty() {
-            continue;
-        }
-
-        match key {
-            "rpcuser" => user = Some(value.to_owned()),
-            "rpcpassword" => pass = Some(value.to_owned()),
-            _ => {}
-        }
-    }
-
-    match (user, pass) {
-        (Some(user), Some(pass)) => Some((user, pass)),
-        _ => None,
-    }
+    let conf = Ini::load_from_file("bitcoin.conf").ok()?;
+    let section = conf.general_section();
+    let user = section.get("rpcuser")?;
+    let pass = section.get("rpcpassword")?;
+    Some((user.to_owned(), pass.to_owned()))
 }
