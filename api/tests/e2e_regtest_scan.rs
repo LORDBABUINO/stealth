@@ -5,7 +5,7 @@ use corepc_node::client::bitcoin::Amount;
 use corepc_node::Node;
 use reqwest::StatusCode;
 use serde_json::{json, Value};
-use stealth_bitcoincore::BitcoinCoreRpc;
+use stealth_bitcoincore::{read_cookie_file, BitcoinCoreRpc};
 use tokio::sync::oneshot;
 
 #[tokio::test]
@@ -32,12 +32,9 @@ async fn scan_descriptor_clean_then_findings_after_regtest_activity() {
         .expect("wallet address has no descriptor");
 
     let rpc_url = node.rpc_url();
-    let cookie =
-        std::fs::read_to_string(&node.params.cookie_file).expect("failed to read cookie file");
+    let cookie_path = node.params.cookie_file.clone();
     let gateway = tokio::task::spawn_blocking(move || {
-        let mut parts = cookie.trim().splitn(2, ':');
-        let user = parts.next().unwrap().to_string();
-        let pass = parts.next().unwrap().to_string();
+        let (user, pass) = read_cookie_file(&cookie_path).expect("failed to read cookie file");
         BitcoinCoreRpc::from_url(&rpc_url, Some(user), Some(pass)).expect("failed to build gateway")
     })
     .await
