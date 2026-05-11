@@ -96,13 +96,13 @@ model/src/types.rs
 
 ## Vulnerabilities detected
 
-Stealth currently runs **12 detectors** in `stealth-engine`.
+Stealth currently runs **16 detectors** in `stealth-engine`.
 
 | #   | Type                     | Default severity | What it indicates                                      |
 | --- | ------------------------ | ---------------- | ------------------------------------------------------ |
 | 1   | `ADDRESS_REUSE`          | HIGH             | Same receive address used across multiple transactions |
 | 2   | `CIOH`                   | HIGH - CRITICAL  | Multi-input ownership linkage                          |
-| 3   | `DUST`                   | MEDIUM - HIGH    | Dust outputs received/spent                            |
+| 3   | `DUST`                   | MEDIUM - CRITICAL | Dust outputs received/spent (escalated to CRITICAL when the parent matches a dust-attack pattern) |
 | 4   | `DUST_SPENDING`          | HIGH             | Dust merged with normal inputs                         |
 | 5   | `CHANGE_DETECTION`       | MEDIUM           | Identifiable change output patterns                    |
 | 6   | `CONSOLIDATION`          | MEDIUM           | Consolidation transactions linking clusters            |
@@ -112,11 +112,10 @@ Stealth currently runs **12 detectors** in `stealth-engine`.
 | 10  | `EXCHANGE_ORIGIN`        | MEDIUM           | Signals typical of exchange batch withdrawals          |
 | 11  | `TAINTED_UTXO_MERGE`     | HIGH             | Tainted and clean inputs merged                        |
 | 12  | `BEHAVIORAL_FINGERPRINT` | MEDIUM           | Repeating transaction patterns                         |
-| 13  | `DUST_ATTACK`            | CRITICAL         | Coordinated dust-pattern behavior                      |
-| 14  | `PEEL_CHAIN`             | HIGH - CRITICAL  | Repeated peeling flow across hops                      |
-| 15  | `DETERMINISTIC_LINK`     | HIGH             | Deterministic input-output mapping                     |
-| 16  | `UNNECESSARY_INPUT`      | MEDIUM           | Extra inputs increasing CIOH exposure                  |
-| 17  | `TOXIC_CHANGE`           | HIGH             | Toxic change consolidation patterns                    |
+| 13  | `PEEL_CHAIN`             | HIGH - CRITICAL  | Repeated peeling flow across hops                      |
+| 14  | `DETERMINISTIC_LINK`     | HIGH             | Deterministic input-output mapping                     |
+| 15  | `UNNECESSARY_INPUT`      | MEDIUM           | Extra inputs increasing CIOH exposure                  |
+| 16  | `TOXIC_CHANGE`           | HIGH             | Toxic change consolidation patterns                    |
 
 ### Warning types
 
@@ -124,7 +123,7 @@ Stealth currently runs **12 detectors** in `stealth-engine`.
 | --------------- | ---------------- | ----------------------------------------------- |
 | `DORMANT_UTXOS` | LOW              | Dormant/hoarded UTXO behavior                   |
 | `DIRECT_TAINT`  | HIGH             | Funds directly received from known risky source |
-| `DETERMINISTIC_LINK` | LOW              | Appears as a low-risk ambiguity signal in some transactions |
+| `DETERMINISTIC_LINK` | LOW              | Low ambiguity (input→output mapping largely guessable) without a fully deterministic link |
 
 ## How to use the frontend
 
