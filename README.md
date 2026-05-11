@@ -174,76 +174,33 @@ Copy `bitcoin.conf.example` to `bitcoin.conf` and edit the credentials if needed
 cp bitcoin.conf.example bitcoin.conf
 ```
 
-### 3. Start Bitcoin Core
-
-Regtest example:
+### 3. Set up regtest (starts node, creates wallet, mines blocks)
 
 ```bash
-mkdir -p "$PWD/.bitcoin-regtest"
-bitcoind -datadir="$PWD/.bitcoin-regtest" -conf="$PWD/bitcoin.conf" -daemon
+./scripts/setup.sh
 ```
 
-Mainnet example:
-
-```bash
-bitcoind -daemon
-```
+Use `./scripts/setup.sh --fresh` to wipe the chain and start from genesis.
 
 ### 4. Start the API
 
 ```bash
-STEALTH_RPC_URL=http://127.0.0.1:18443 \
-STEALTH_RPC_USER=localuser \
-STEALTH_RPC_PASS=localpass \
-  cargo run --bin stealth-api
+cargo run --bin stealth-api
 ```
 
 `stealth-api` auto-detects common local RPC ports and can use credentials from `bitcoin.conf`, cookie file, or env vars.
 
-### 5. Run a usable scan request
+### 5. Scan (in another terminal)
 
 ```bash
-DATADIR="$PWD/.bitcoin-regtest"
-CONF="$PWD/bitcoin.conf"
-RPC="bitcoin-cli -datadir=$DATADIR -conf=$CONF -regtest -rpcport=18443"
-API_PORT=20899
-
-mkdir -p "$DATADIR"
-if ! $RPC getblockchaininfo >/dev/null 2>&1; then
-  bitcoind -datadir="$DATADIR" -conf="$CONF" -daemon
-fi
-
-for _ in $(seq 1 100); do
-  if $RPC getblockchaininfo >/dev/null 2>&1; then
-    break
-  fi
-  sleep 0.2
-done
-
-STEALTH_RPC_URL=http://127.0.0.1:18443 \
-STEALTH_RPC_USER=localuser \
-STEALTH_RPC_PASS=localpass \
-STEALTH_API_BIND=127.0.0.1:$API_PORT \
-  cargo run --bin stealth-api >/tmp/stealth-api.log 2>&1 &
-API_PID=$!
-trap 'kill $API_PID >/dev/null 2>&1 || true' EXIT
-
-WALLET="scanwallet_$(date +%s)"
-$RPC createwallet "$WALLET" >/dev/null
-TARGET_ADDR="$($RPC -rpcwallet="$WALLET" getnewaddress)"
-$RPC generatetoaddress 101 "$TARGET_ADDR" >/dev/null
-
-DESC="$($RPC -rpcwallet="$WALLET" getaddressinfo "$TARGET_ADDR" | jq -r '.desc')"
-
-curl -s "http://127.0.0.1:$API_PORT/api/wallet/scan"   -H 'content-type: application/json'   -d "{\"descriptor\":\"$DESC\"}" | jq
-
-$RPC stop
+curl -s 'http://localhost:20899/api/wallet/scan' \
+    -H 'content-type: application/json' \
+    -d '{"descriptor":"<descriptor from setup.sh output>"}' | jq
 ```
 
 ### 6. Alternative: CLI scan
 
 ```bash
-./scripts/setup.sh
 cargo run --bin stealth-cli -- scan \
   --descriptor '<descriptor from setup.sh output>' \
   --rpc-url http://127.0.0.1:18443 \
@@ -251,7 +208,7 @@ cargo run --bin stealth-cli -- scan \
   --format text
 ```
 
-### 5. Start frontend
+### 7. Start frontend
 
 ```bash
 cd frontend
