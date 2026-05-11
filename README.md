@@ -168,23 +168,10 @@ cargo build
 
 ### 2. Configure Bitcoin Core RPC (regtest)
 
-Create a local `bitcoin.conf`:
+Copy `bitcoin.conf.example` to `bitcoin.conf` and edit the credentials if needed.
 
 ```bash
-cat > bitcoin.conf <<'EOF'
-regtest=1
-server=1
-daemon=1
-txindex=1
-listen=0
-[regtest]
-rpcbind=127.0.0.1
-rpcallowip=127.0.0.1
-rpcuser=localuser
-rpcpassword=localpass
-rpcport=18443
-fallbackfee=0.0002
-EOF
+cp bitcoin.conf.example bitcoin.conf
 ```
 
 ### 3. Start Bitcoin Core
