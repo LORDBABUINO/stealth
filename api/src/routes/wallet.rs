@@ -41,39 +41,15 @@ async fn scan_post(
 
 impl ScanRequestBody {
     fn into_scan_target(self) -> Result<ScanTarget, ApiError> {
-        let mut selected_sources = 0usize;
-        if self.descriptor.is_some() {
-            selected_sources += 1;
-        }
-        if self.descriptors.is_some() {
-            selected_sources += 1;
-        }
-        if self.utxos.is_some() {
-            selected_sources += 1;
-        }
-
-        if selected_sources == 0 {
-            return Err(ApiError::bad_request(
+        match (self.descriptor, self.descriptors, self.utxos) {
+            (Some(d), None, None) => Ok(ScanTarget::Descriptor(d)),
+            (None, Some(ds), None) => Ok(ScanTarget::Descriptors(ds)),
+            (None, None, Some(utxos)) => Ok(ScanTarget::Utxos(utxos)),
+            (None, None, None) => Err(ApiError::bad_request(
                 "one input source is required: descriptor, descriptors, or utxos",
-            ));
+            )),
+            _ => Err(ApiError::bad_request("provide exactly one input source")),
         }
-        if selected_sources > 1 {
-            return Err(ApiError::bad_request(
-                "descriptor, descriptors, and utxos are mutually exclusive",
-            ));
-        }
-
-        if let Some(descriptor) = self.descriptor {
-            return Ok(ScanTarget::Descriptor(descriptor));
-        }
-        if let Some(descriptors) = self.descriptors {
-            return Ok(ScanTarget::Descriptors(descriptors));
-        }
-        if let Some(utxos) = self.utxos {
-            return Ok(ScanTarget::Utxos(utxos));
-        }
-
-        Err(ApiError::bad_request("invalid scan request body"))
     }
 }
 
