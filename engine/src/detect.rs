@@ -586,7 +586,7 @@ impl TxGraph {
         }
 
         let mut aged: Vec<_> = our_utxos.iter().map(|u| (u, u.confirmations)).collect();
-        aged.sort_by(|a, b| b.1.cmp(&a.1));
+        aged.sort_by_key(|b| std::cmp::Reverse(b.1));
 
         let oldest = aged.first().unwrap();
         let newest = aged.last().unwrap();
