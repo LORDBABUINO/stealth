@@ -41,8 +41,10 @@ impl ScanRequestBody {
     fn into_scan_target(self) -> Result<ScanTarget, ApiError> {
         match (self.descriptor, self.descriptors, self.utxos) {
             (Some(d), None, None) => Ok(ScanTarget::Descriptor(d)),
-            (None, Some(ds), None) => Ok(ScanTarget::Descriptors(ds)),
-            (None, None, Some(utxos)) => Ok(ScanTarget::Utxos(utxos)),
+            (None, Some(ds), None) if !ds.is_empty() => Ok(ScanTarget::Descriptors(ds)),
+            (None, Some(_), None) => Err(ApiError::bad_request("`descriptors` must not be empty")),
+            (None, None, Some(utxos)) if !utxos.is_empty() => Ok(ScanTarget::Utxos(utxos)),
+            (None, None, Some(_)) => Err(ApiError::bad_request("`utxos` must not be empty")),
             (None, None, None) => Err(ApiError::bad_request(
                 "one input source is required: descriptor, descriptors, or utxos",
             )),
@@ -117,6 +119,44 @@ mod tests {
                         })
                         .to_string(),
                     ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = read_json(response).await;
+        assert_eq!(body["error"]["code"], "bad_request");
+    }
+
+    #[tokio::test]
+    async fn post_scan_rejects_empty_descriptors_list() {
+        let response = app()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/wallet/scan")
+                    .method("POST")
+                    .header("content-type", "application/json")
+                    .body(Body::from(json!({ "descriptors": [] }).to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = read_json(response).await;
+        assert_eq!(body["error"]["code"], "bad_request");
+    }
+
+    #[tokio::test]
+    async fn post_scan_rejects_empty_utxos_list() {
+        let response = app()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/wallet/scan")
+                    .method("POST")
+                    .header("content-type", "application/json")
+                    .body(Body::from(json!({ "utxos": [] }).to_string()))
                     .unwrap(),
             )
             .await
