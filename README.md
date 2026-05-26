@@ -31,7 +31,8 @@ Stealth ships a Rust workspace with:
 
 - `stealth-engine` (analysis engine)
 - `stealth-model` (domain model types and interfaces)
-- `stealth-cli`
+- `stealth-api` (http api)
+- `stealth-cli` (command-line interface)
 - `stealth-bitcoincore` (Bitcoin Core RPC gateway adapter)
 
 ## Project Direction
@@ -167,24 +168,37 @@ cargo build
 
 ### 2. Configure Bitcoin Core RPC (regtest)
 
-Copy the example config:
+Copy `bitcoin.conf.example` to `bitcoin.conf` and edit the credentials if needed.
 
 ```bash
 cp bitcoin.conf.example bitcoin.conf
 ```
 
-### 3. Start regtest and fund a wallet
+### 3. Set up regtest (starts node, creates wallet, mines blocks)
 
 ```bash
 ./scripts/setup.sh
 ```
 
-This starts `bitcoind` in regtest mode, creates a wallet, mines initial blocks,
-and prints the descriptor and a ready-to-use `stealth-cli` command.
-
 Use `./scripts/setup.sh --fresh` to wipe the chain and start from genesis.
 
-### 4. Run a CLI scan
+### 4. Start the API
+
+```bash
+cargo run --bin stealth-api
+```
+
+`stealth-api` auto-detects common local RPC ports and can use credentials from `bitcoin.conf`, cookie file, or env vars.
+
+### 5. Scan (in another terminal)
+
+```bash
+curl -s 'http://localhost:20899/api/wallet/scan' \
+    -H 'content-type: application/json' \
+    -d '{"descriptor":"<descriptor from setup.sh output>"}' | jq
+```
+
+### 6. Alternative: CLI scan
 
 ```bash
 cargo run --bin stealth-cli -- scan \
@@ -194,7 +208,7 @@ cargo run --bin stealth-cli -- scan \
   --format text
 ```
 
-### 5. Start frontend
+### 7. Start frontend
 
 ```bash
 cd frontend
@@ -231,6 +245,10 @@ stealth/
 │   │   ├── config.ini     # Connection config (datadir, network)
 │   │   └── bitcoin-data/  # Regtest chain data (gitignored)
 │   └── src/StealthBackend/ # Quarkus Java REST API (single /api/wallet/scan endpoint)
+├── slides/                # Slidev pitch presentation
+├── api/                   # stealth-api (Axum HTTP layer)
+│   ├── src/
+│   └── tests/
 ├── cli/                   # stealth-cli
 ├── scripts/               # Development helper scripts (setup.sh)
 └── target/                # Cargo build outputs
