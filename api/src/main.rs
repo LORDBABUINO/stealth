@@ -167,8 +167,14 @@ fn cookie_candidates(bitcoin_dir: &Path, port: u16) -> Vec<PathBuf> {
 
 fn read_bitcoin_conf_credentials() -> Option<(String, String)> {
     let conf = Ini::load_from_file("bitcoin.conf").ok()?;
-    let section = conf.general_section();
-    let user = section.get("rpcuser")?;
-    let pass = section.get("rpcpassword")?;
-    Some((user.to_owned(), pass.to_owned()))
+    let try_section = |props: &ini::Properties| -> Option<(String, String)> {
+        let user = props.get("rpcuser")?;
+        let pass = props.get("rpcpassword")?;
+        Some((user.to_owned(), pass.to_owned()))
+    };
+    try_section(conf.general_section())
+        .or_else(|| conf.section(Some("regtest")).and_then(try_section))
+        .or_else(|| conf.section(Some("test")).and_then(try_section))
+        .or_else(|| conf.section(Some("signet")).and_then(try_section))
+        .or_else(|| conf.section(Some("main")).and_then(try_section))
 }
