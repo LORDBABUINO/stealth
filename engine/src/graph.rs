@@ -178,10 +178,7 @@ impl TxGraph {
                     // Reverse spending index — populated during the same
                     // pass we already make over every input.
                     if txid_is_ours {
-                        spending_index.insert(
-                            (input.previous_txid, input.previous_vout),
-                            *txid,
-                        );
+                        spending_index.insert((input.previous_txid, input.previous_vout), *txid);
                     }
                     let parent = history.transactions.get(&input.previous_txid)?;
                     let out = parent.vout.iter().find(|o| o.n == input.previous_vout)?;

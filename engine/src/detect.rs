@@ -1173,8 +1173,7 @@ impl TxGraph {
 
             while hops < max_hops {
                 // Find the child transaction that spends trace_txid:trace_vout
-                let Some(child_txid) =
-                    self.spending_index.get(&(trace_txid, trace_vout)).copied()
+                let Some(child_txid) = self.spending_index.get(&(trace_txid, trace_vout)).copied()
                 else {
                     break;
                 };
@@ -1509,8 +1508,7 @@ impl TxGraph {
 
                 // Check if this toxic change was later spent alongside
                 // a larger UTXO (the dangerous consolidation).
-                let Some(child_txid) = self.spending_index.get(&(txid, out.index)).copied()
-                else {
+                let Some(child_txid) = self.spending_index.get(&(txid, out.index)).copied() else {
                     continue;
                 };
                 let child_inputs = self.get_input_addresses(&child_txid);
@@ -1549,5 +1547,4 @@ impl TxGraph {
             }
         }
     }
-
 }
