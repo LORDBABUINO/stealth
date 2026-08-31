@@ -241,16 +241,6 @@ stealth/
 │       ├── components/    # FindingCard, VulnerabilityBadge
 │       ├── screens/       # InputScreen, LoadingScreen, ReportScreen
 │       └── services/      # walletService.js (API client)
-├── backend/
-│   ├── script/            # Python scripts + regtest data
-│   │   ├── setup.sh       # Bootstrap bitcoind regtest
-│   │   ├── reproduce.py   # Create 12 vulnerability scenarios
-│   │   ├── detect.py      # Privacy vulnerability detector
-│   │   ├── bitcoin_rpc.py # bitcoin-cli wrapper
-│   │   ├── config.ini     # Connection config (datadir, network)
-│   │   └── bitcoin-data/  # Regtest chain data (gitignored)
-│   └── src/StealthBackend/ # Quarkus Java REST API (single /api/wallet/scan endpoint)
-├── slides/                # Slidev pitch presentation
 ├── api/                   # stealth-api (Axum HTTP layer)
 │   ├── src/
 │   └── tests/
