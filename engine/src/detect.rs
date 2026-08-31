@@ -159,7 +159,7 @@ impl TxGraph {
 
     // ── 3. Dust UTXO Detection ─────────────────────────────────────────────
     //
-    // Also detects the dust-attack pattern (formerly Detector 13). Every
+    // Also detects the dust-attack pattern (formerly a standalone detector). Every
     // dust-attack output is by definition a dust UTXO, so the two
     // detectors fire on the same data — we collapse them by escalating
     // severity and attaching attack evidence to the existing Dust finding
