@@ -41,7 +41,11 @@ fn run_scan(args: &[String]) -> Result<bool, String> {
     let gateway = opts.build_gateway()?;
     let target = opts.scan_target()?;
 
-    let engine = AnalysisEngine::new(&gateway, EngineSettings::default());
+    let settings = EngineSettings {
+        rescan_since: opts.rescan_since,
+        ..EngineSettings::default()
+    };
+    let engine = AnalysisEngine::new(&gateway, settings);
     let report = engine.analyze(target).map_err(|e| e.to_string())?;
 
     match opts.format.as_deref() {
@@ -62,6 +66,7 @@ struct ScanOpts {
     descriptor: Option<String>,
     descriptors_file: Option<PathBuf>,
     utxos_file: Option<PathBuf>,
+    rescan_since: Option<u64>,
     rpc_url: Option<String>,
     rpc_user: Option<String>,
     rpc_cookie: Option<PathBuf>,
@@ -157,6 +162,13 @@ fn parse_scan_args(args: &[String]) -> Result<ScanOpts, String> {
             "--utxos" => {
                 opts.utxos_file = Some(PathBuf::from(take_value(args, &mut i, "--utxos")?));
             }
+            "--rescan-since" => {
+                let raw = take_value(args, &mut i, "--rescan-since")?;
+                let ts = raw.parse::<u64>().map_err(|_| {
+                    format!("--rescan-since expects a unix timestamp in seconds, got '{raw}'")
+                })?;
+                opts.rescan_since = Some(ts);
+            }
             "--rpc-url" => {
                 opts.rpc_url = Some(take_value(args, &mut i, "--rpc-url")?);
             }
@@ -235,6 +247,10 @@ fn print_usage() {
     eprintln!("  --descriptor <DESC>      Single output descriptor");
     eprintln!("  --descriptors <FILE>     JSON array of descriptors");
     eprintln!("  --utxos <FILE>           JSON array of {{txid,vout,...}}\n");
+    eprintln!("DESCRIPTOR OPTIONS:");
+    eprintln!("  --rescan-since <UNIX_TS> Rescan from this time when importing");
+    eprintln!("                           descriptors (default: genesis; set this");
+    eprintln!("                           to the wallet's birth time on mainnet)\n");
     eprintln!("RPC CONNECTION:");
     eprintln!("  --rpc-url <URL>          bitcoind RPC endpoint");
     eprintln!("  --rpc-user <USER>        RPC username");
@@ -247,4 +263,30 @@ fn print_usage() {
     eprintln!("  0  scan completed, no findings");
     eprintln!("  1  scan completed, findings present");
     eprintln!("  2  error");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn to_args(parts: &[&str]) -> Vec<String> {
+        parts.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn parses_rescan_since() {
+        let opts = parse_scan_args(&to_args(&[
+            "--utxos",
+            "u.json",
+            "--rescan-since",
+            "1700000000",
+        ]))
+        .unwrap();
+        assert_eq!(opts.rescan_since, Some(1_700_000_000));
+    }
+
+    #[test]
+    fn rejects_non_numeric_rescan_since() {
+        assert!(parse_scan_args(&to_args(&["--rescan-since", "yesterday"])).is_err());
+    }
 }

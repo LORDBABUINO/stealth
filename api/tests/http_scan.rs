@@ -136,3 +136,20 @@ impl TestServer {
         let _ = self.handle.await;
     }
 }
+
+#[tokio::test]
+async fn post_scan_accepts_rescan_since_alongside_descriptor() {
+    let server = TestServer::spawn().await;
+    let response = reqwest::Client::new()
+        .post(server.url("/api/wallet/scan"))
+        .json(&serde_json::json!({ "descriptor": "wpkh(x/0/*)", "rescan_since": 1700000000 }))
+        .send()
+        .await
+        .unwrap();
+    // Field deserializes and passes input validation; only the missing
+    // gateway stops the scan in this test server.
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    let body: serde_json::Value = response.json().await.unwrap();
+    assert_eq!(body["error"]["code"], "scanner_not_configured");
+    server.stop().await;
+}
