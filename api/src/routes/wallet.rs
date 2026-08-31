@@ -18,17 +18,24 @@ struct ScanRequestBody {
     descriptors: Option<Vec<String>>,
     #[serde(default)]
     utxos: Option<Vec<UtxoInput>>,
+    #[serde(default)]
+    rescan_since: Option<u64>,
 }
 
 async fn scan_post(
     State(gateway): State<GatewayState>,
     Json(body): Json<ScanRequestBody>,
 ) -> Result<Json<Report>, ApiError> {
+    let rescan_since = body.rescan_since;
     let target = body.into_scan_target()?;
 
     let gw = gateway.ok_or(ApiError::ScannerNotConfigured)?;
     let report = tokio::task::spawn_blocking(move || {
-        let engine = AnalysisEngine::new(gw.as_ref(), EngineSettings::default());
+        let settings = EngineSettings {
+            rescan_since,
+            ..EngineSettings::default()
+        };
+        let engine = AnalysisEngine::new(gw.as_ref(), settings);
         engine.analyze(target)
     })
     .await

@@ -141,7 +141,9 @@ pub struct BitcoinCoreRpc {
 
 impl BitcoinCoreRpc {
     pub fn new(config: BitcoinCoreConfig) -> Result<Self, AnalysisError> {
+        // No timeout: descriptor imports block on Core's synchronous rescan.
         let client = Client::builder()
+            .timeout(None)
             .build()
             .map_err(|error| AnalysisError::EnvironmentUnavailable(error.to_string()))?;
         Ok(Self { config, client })
@@ -396,6 +398,11 @@ impl BitcoinCoreRpc {
     fn unload_wallet(&self, wallet_name: &str) {
         let _ = self.call::<Value>(None, "unloadwallet", vec![json!(wallet_name)]);
     }
+
+    // unloadwallet fails while a rescan is running, so the guard aborts first.
+    fn abort_rescan(&self, wallet_name: &str) {
+        let _ = self.call::<Value>(Some(wallet_name), "abortrescan", Vec::new());
+    }
 }
 
 impl BlockchainGateway for BitcoinCoreRpc {
@@ -450,7 +457,7 @@ impl BlockchainGateway for BitcoinCoreRpc {
                 let is_ranged = descriptor.desc.contains('*');
                 let mut entry = json!({
                     "desc": descriptor.desc,
-                    "timestamp": 0,
+                    "timestamp": descriptor.rescan_since.unwrap_or(0),
                     "internal": descriptor.internal,
                     "active": is_ranged && descriptor.active,
                 });
@@ -507,6 +514,7 @@ impl BlockchainGateway for BitcoinCoreRpc {
             .descriptors
             .into_iter()
             .map(|descriptor| ResolvedDescriptor {
+                rescan_since: None,
                 desc: descriptor.desc,
                 internal: descriptor.internal.unwrap_or(false),
                 active: descriptor.active.unwrap_or(true),
@@ -571,6 +579,7 @@ struct WalletGuard<'a> {
 
 impl Drop for WalletGuard<'_> {
     fn drop(&mut self) {
+        self.rpc.abort_rescan(self.name);
         self.rpc.unload_wallet(self.name);
     }
 }

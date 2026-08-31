@@ -36,4 +36,5 @@ pub struct EngineSettings {
     pub config: AnalysisConfig,
     pub known_risky_txids: Option<HashSet<Txid>>,
     pub known_exchange_txids: Option<HashSet<Txid>>,
+    pub rescan_since: Option<u64>,
 }

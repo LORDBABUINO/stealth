@@ -59,6 +59,7 @@ impl<'a, G: BlockchainGateway + ?Sized> AnalysisEngine<'a, G> {
         let resolved = normalize_descriptors(
             &raw_descriptors,
             self.settings.config.derivation_range_end,
+            self.settings.rescan_since,
             self.gateway,
         )?;
         let history = self.gateway.scan_descriptors(&resolved)?;
