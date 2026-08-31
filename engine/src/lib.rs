@@ -21,7 +21,7 @@
 //! |---|---------------|------------------|
 //! | 1 | Address reuse | HIGH |
 //! | 2 | Common-input-ownership heuristic (CIOH) | HIGH – CRITICAL |
-//! | 3 | Dust UTXO reception | MEDIUM – HIGH |
+//! | 3 | Dust UTXO reception | MEDIUM – CRITICAL |
 //! | 4 | Dust spent alongside normal inputs | HIGH |
 //! | 5 | Identifiable change outputs | MEDIUM |
 //! | 6 | UTXOs born from consolidation transactions | MEDIUM |
@@ -31,6 +31,14 @@
 //! | 10 | Exchange-origin batch withdrawal | MEDIUM |
 //! | 11 | Tainted UTXO merge | HIGH |
 //! | 12 | Behavioural fingerprinting | MEDIUM |
+//! | 13 | Peel chain detection | HIGH – CRITICAL |
+//! | 14 | Deterministic input→output links | HIGH |
+//! | 15 | Unnecessary input (excess CIOH exposure) | MEDIUM |
+//! | 16 | Toxic change consolidation | HIGH |
+//!
+//! Dust-attack patterns are detected as part of dust analysis (3): when the
+//! parent transaction matches the attack signature, the finding is escalated
+//! to CRITICAL and `dust_attack` evidence is attached to its details.
 
 pub use stealth_model::config;
 pub use stealth_model::descriptor;

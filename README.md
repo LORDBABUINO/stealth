@@ -31,7 +31,8 @@ Stealth ships a Rust workspace with:
 
 - `stealth-engine` (analysis engine)
 - `stealth-model` (domain model types and interfaces)
-- `stealth-cli`
+- `stealth-api` (http api)
+- `stealth-cli` (command-line interface)
 - `stealth-bitcoincore` (Bitcoin Core RPC gateway adapter)
 
 ## Project Direction
@@ -96,13 +97,13 @@ model/src/types.rs
 
 ## Vulnerabilities detected
 
-Stealth currently runs **12 detectors** in `stealth-engine`.
+Stealth currently runs **16 detectors** in `stealth-engine`.
 
 | #   | Type                     | Default severity | What it indicates                                      |
 | --- | ------------------------ | ---------------- | ------------------------------------------------------ |
 | 1   | `ADDRESS_REUSE`          | HIGH             | Same receive address used across multiple transactions |
 | 2   | `CIOH`                   | HIGH - CRITICAL  | Multi-input ownership linkage                          |
-| 3   | `DUST`                   | MEDIUM - HIGH    | Dust outputs received/spent                            |
+| 3   | `DUST`                   | MEDIUM - CRITICAL | Dust outputs received/spent (escalated to CRITICAL when the parent matches a dust-attack pattern) |
 | 4   | `DUST_SPENDING`          | HIGH             | Dust merged with normal inputs                         |
 | 5   | `CHANGE_DETECTION`       | MEDIUM           | Identifiable change output patterns                    |
 | 6   | `CONSOLIDATION`          | MEDIUM           | Consolidation transactions linking clusters            |
@@ -112,6 +113,10 @@ Stealth currently runs **12 detectors** in `stealth-engine`.
 | 10  | `EXCHANGE_ORIGIN`        | MEDIUM           | Signals typical of exchange batch withdrawals          |
 | 11  | `TAINTED_UTXO_MERGE`     | HIGH             | Tainted and clean inputs merged                        |
 | 12  | `BEHAVIORAL_FINGERPRINT` | MEDIUM           | Repeating transaction patterns                         |
+| 13  | `PEEL_CHAIN`             | HIGH - CRITICAL  | Repeated peeling flow across hops                      |
+| 14  | `DETERMINISTIC_LINK`     | HIGH             | Deterministic input-output mapping                     |
+| 15  | `UNNECESSARY_INPUT`      | MEDIUM           | Extra inputs increasing CIOH exposure                  |
+| 16  | `TOXIC_CHANGE`           | HIGH             | Toxic change consolidation patterns                    |
 
 ### Warning types
 
@@ -119,6 +124,7 @@ Stealth currently runs **12 detectors** in `stealth-engine`.
 | --------------- | ---------------- | ----------------------------------------------- |
 | `DORMANT_UTXOS` | LOW              | Dormant/hoarded UTXO behavior                   |
 | `DIRECT_TAINT`  | HIGH             | Funds directly received from known risky source |
+| `DETERMINISTIC_LINK` | LOW              | Low ambiguity (input→output mapping largely guessable) without a fully deterministic link |
 
 ## How to use the frontend
 
@@ -167,24 +173,37 @@ cargo build
 
 ### 2. Configure Bitcoin Core RPC (regtest)
 
-Copy the example config:
+Copy `bitcoin.conf.example` to `bitcoin.conf` and edit the credentials if needed.
 
 ```bash
 cp bitcoin.conf.example bitcoin.conf
 ```
 
-### 3. Start regtest and fund a wallet
+### 3. Set up regtest (starts node, creates wallet, mines blocks)
 
 ```bash
 ./scripts/setup.sh
 ```
 
-This starts `bitcoind` in regtest mode, creates a wallet, mines initial blocks,
-and prints the descriptor and a ready-to-use `stealth-cli` command.
-
 Use `./scripts/setup.sh --fresh` to wipe the chain and start from genesis.
 
-### 4. Run a CLI scan
+### 4. Start the API
+
+```bash
+cargo run --bin stealth-api
+```
+
+`stealth-api` auto-detects common local RPC ports and can use credentials from `bitcoin.conf`, cookie file, or env vars.
+
+### 5. Scan (in another terminal)
+
+```bash
+curl -s 'http://localhost:20899/api/wallet/scan' \
+    -H 'content-type: application/json' \
+    -d '{"descriptor":"<descriptor from setup.sh output>"}' | jq
+```
+
+### 6. Alternative: CLI scan
 
 ```bash
 cargo run --bin stealth-cli -- scan \
@@ -194,7 +213,7 @@ cargo run --bin stealth-cli -- scan \
   --format text
 ```
 
-### 5. Start frontend
+### 7. Start frontend
 
 ```bash
 cd frontend
@@ -222,6 +241,9 @@ stealth/
 │       ├── components/    # FindingCard, VulnerabilityBadge
 │       ├── screens/       # InputScreen, LoadingScreen, ReportScreen
 │       └── services/      # walletService.js (API client)
+├── api/                   # stealth-api (Axum HTTP layer)
+│   ├── src/
+│   └── tests/
 ├── cli/                   # stealth-cli
 ├── scripts/               # Development helper scripts (setup.sh)
 └── target/                # Cargo build outputs
