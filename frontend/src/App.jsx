@@ -2,6 +2,7 @@ import { useState } from 'react'
 import InputScreen from './screens/InputScreen'
 import LoadingScreen from './screens/LoadingScreen'
 import ReportScreen from './screens/ReportScreen'
+import ErrorBoundary from './components/ErrorBoundary'
 import { analyzeWallet } from './services/walletService'
 
 export default function App() {
@@ -28,7 +29,11 @@ export default function App() {
     setReport(null)
   }
 
-  if (screen === 'loading') return <LoadingScreen text={scan.text} kind={scan.kind} />
-  if (screen === 'report') return <ReportScreen report={report} descriptor={scan.text} onReset={handleReset} />
-  return <InputScreen onAnalyze={handleAnalyze} />
+  function renderScreen() {
+    if (screen === 'loading') return <LoadingScreen text={scan?.text} kind={scan?.kind} />
+    if (screen === 'report') return <ReportScreen report={report} descriptor={scan?.text} onReset={handleReset} />
+    return <InputScreen onAnalyze={handleAnalyze} />
+  }
+
+  return <ErrorBoundary onReset={handleReset}>{renderScreen()}</ErrorBoundary>
 }
