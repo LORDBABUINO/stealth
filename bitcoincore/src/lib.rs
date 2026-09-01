@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use bitcoin::address::NetworkUnchecked;
@@ -555,12 +556,11 @@ impl BlockchainGateway for BitcoinCoreRpc {
         &self,
         descriptors: &[ResolvedDescriptor],
     ) -> Result<WalletHistory, AnalysisError> {
-        let wallet_name = format!(
-            "_stealth_scan_{}",
+        let wallet_name = scan_wallet_name(
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map_err(|error| AnalysisError::EnvironmentUnavailable(error.to_string()))?
-                .as_millis()
+                .as_millis(),
         );
         self.create_watch_only_wallet(&wallet_name)?;
 
@@ -704,6 +704,12 @@ impl Drop for WalletGuard<'_> {
         self.rpc.abort_rescan(self.name);
         self.rpc.unload_wallet(self.name);
     }
+}
+
+fn scan_wallet_name(timestamp_millis: u128) -> String {
+    static SCAN_WALLET_COUNTER: AtomicU64 = AtomicU64::new(0);
+    let sequence = SCAN_WALLET_COUNTER.fetch_add(1, Ordering::Relaxed);
+    format!("_stealth_scan_{timestamp_millis}_{sequence}")
 }
 
 fn parse_txid(s: &str) -> Result<Txid, AnalysisError> {
@@ -871,7 +877,7 @@ struct RawScriptPubKey {
 
 #[cfg(test)]
 mod tests {
-    use super::default_rpc_port;
+    use super::{default_rpc_port, scan_wallet_name};
 
     #[test]
     fn network_defaults_match_bitcoin_core_ports() {
@@ -879,5 +885,16 @@ mod tests {
         assert_eq!(default_rpc_port("testnet"), 18332);
         assert_eq!(default_rpc_port("signet"), 38332);
         assert_eq!(default_rpc_port("mainnet"), 8332);
+    }
+
+    #[test]
+    fn scan_wallet_names_differ_for_same_timestamp() {
+        let first = scan_wallet_name(1_700_000_000_000);
+        let second = scan_wallet_name(1_700_000_000_000);
+        assert!(first.starts_with("_stealth_scan_1700000000000"));
+        assert_ne!(
+            first, second,
+            "concurrent scans in the same millisecond must not collide"
+        );
     }
 }
