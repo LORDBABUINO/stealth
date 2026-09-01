@@ -77,6 +77,31 @@ describe('classifyInput: xpub', () => {
   })
 })
 
+describe('classifyInput: private', () => {
+  const XPRV = 'xprv' + XPUB.slice(4)
+
+  it.each(['xprv', 'yprv', 'zprv', 'tprv', 'uprv', 'vprv'])(
+    'classifies a bare %s key as private',
+    (prefix) => {
+      const key = prefix + XPUB.slice(4)
+      expect(classifyInput(key)).toEqual({ kind: 'private', value: key })
+    }
+  )
+
+  it('flags a descriptor containing an xprv as private, not descriptor', () => {
+    expect(classifyInput(`wpkh(${XPRV}/0/*)`).kind).toBe('private')
+  })
+
+  it('flags a descriptor with key origin and tprv as private', () => {
+    const tprv = 'tprv' + XPUB.slice(4)
+    expect(classifyInput(`wpkh([a1b2c3d4/84h/0h/0h]${tprv}/0/*)#qwer1234`).kind).toBe('private')
+  })
+
+  it('does not flag a prv-like run buried inside base58 without a boundary', () => {
+    expect(classifyInput(`wpkh(${XPUB.slice(0, 40)}xprv${XPUB.slice(40)})`).kind).toBe('descriptor')
+  })
+})
+
 describe('classifyInput: descriptor', () => {
   it.each([
     `wpkh(${XPUB}/0/*)`,
