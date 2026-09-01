@@ -513,11 +513,12 @@ impl BlockchainGateway for BitcoinCoreRpc {
         &self,
         descriptor: &ResolvedDescriptor,
     ) -> Result<Vec<Address<NetworkUnchecked>>, AnalysisError> {
-        let strings: Vec<String> = self.call(
-            None,
-            "deriveaddresses",
-            vec![json!(descriptor.desc), json!([0, descriptor.range_end])],
-        )?;
+        // Core rejects a range argument for un-ranged descriptors.
+        let mut params = vec![json!(descriptor.desc)];
+        if descriptor.desc.contains('*') {
+            params.push(json!([0, descriptor.range_end]));
+        }
+        let strings: Vec<String> = self.call(None, "deriveaddresses", params)?;
         strings
             .into_iter()
             .map(|s| {
@@ -588,12 +589,11 @@ impl BlockchainGateway for BitcoinCoreRpc {
         let mut internal_addresses = HashSet::new();
         let mut derived_addresses = HashSet::new();
         for desc in descriptors {
-            if let Ok(addrs) = self.derive_addresses(desc) {
-                if desc.internal {
-                    internal_addresses.extend(addrs.iter().cloned());
-                }
-                derived_addresses.extend(addrs);
+            let addrs = self.derive_addresses(desc)?;
+            if desc.internal {
+                internal_addresses.extend(addrs.iter().cloned());
             }
+            derived_addresses.extend(addrs);
         }
         history.internal_addresses = internal_addresses;
         history.derived_addresses = derived_addresses;
@@ -636,12 +636,11 @@ impl BlockchainGateway for BitcoinCoreRpc {
             let mut internal_addresses = HashSet::new();
             let mut derived_addresses = HashSet::new();
             for desc in &descriptors {
-                if let Ok(addrs) = self.derive_addresses(desc) {
-                    if desc.internal {
-                        internal_addresses.extend(addrs.iter().cloned());
-                    }
-                    derived_addresses.extend(addrs);
+                let addrs = self.derive_addresses(desc)?;
+                if desc.internal {
+                    internal_addresses.extend(addrs.iter().cloned());
                 }
+                derived_addresses.extend(addrs);
             }
             history.internal_addresses = internal_addresses;
             history.derived_addresses = derived_addresses;

@@ -14,6 +14,7 @@ mod address_reuse;
 mod behavior;
 mod change;
 mod dust;
+mod gateway;
 mod linkage;
 mod origins;
 mod scanning;
