@@ -56,14 +56,16 @@ fn list_transactions_paginates_beyond_page_size() {
     let da = node.client.new_address().expect("default address");
     mine(&node, 110, &da);
 
+    // One block per send: distinct heights make the ordering assertion
+    // below sensitive to page reassembly.
     let bob = node.create_wallet("bob").expect("create bob");
     for _ in 0..12 {
         let ba = bob.new_address().expect("bob address");
         node.client
             .send_to_address(&ba, Amount::from_sat(100_000))
             .expect("fund bob");
+        mine(&node, 1, &da);
     }
-    mine(&node, 1, &da);
 
     let gateway = gateway_for(&node).with_tx_page_size(5);
     let history = gateway.scan_wallet("bob").expect("scan_wallet");
@@ -75,4 +77,13 @@ fn list_transactions_paginates_beyond_page_size() {
     );
     let unique: HashSet<Txid> = history.wallet_txs.iter().map(|entry| entry.txid).collect();
     assert_eq!(unique.len(), 12, "pages must not duplicate transactions");
+    let heights: Vec<u32> = history
+        .wallet_txs
+        .iter()
+        .map(|entry| entry.blockheight)
+        .collect();
+    assert!(
+        heights.windows(2).all(|pair| pair[0] <= pair[1]),
+        "entries must stay oldest-first across page boundaries, got: {heights:?}"
+    );
 }
