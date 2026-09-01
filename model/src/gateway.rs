@@ -31,6 +31,16 @@ pub trait BlockchainGateway {
     fn scan_wallet(&self, wallet_name: &str) -> Result<WalletHistory, AnalysisError>;
     fn known_wallet_txids(&self, wallet_names: &[String]) -> Result<HashSet<Txid>, AnalysisError>;
     fn get_transaction(&self, txid: Txid) -> Result<DecodedTransaction, AnalysisError>;
+
+    /// Fetch many transactions. The outer `Result` is transport-level;
+    /// per-transaction failures come back in the inner `Result`s.
+    /// Implementations may batch; the default fetches sequentially.
+    fn get_transactions(&self, txids: &[Txid]) -> Result<TxFetchResults, AnalysisError> {
+        Ok(txids
+            .iter()
+            .map(|&txid| (txid, self.get_transaction(txid)))
+            .collect())
+    }
 }
 
 /// Blanket implementation: any `BlockchainGateway` is also a
@@ -45,6 +55,9 @@ where
 }
 
 // ── Gateway model types ─────────────────────────────────────────────────────
+
+/// Per-transaction fetch results paired with their txids.
+pub type TxFetchResults = Vec<(Txid, Result<DecodedTransaction, AnalysisError>)>;
 
 /// A descriptor that has been normalized and resolved for import.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -10,10 +10,11 @@ use reqwest::blocking::Client;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::{json, Value};
+use stealth_model::config::AnalysisConfig;
 use stealth_model::error::AnalysisError;
 use stealth_model::gateway::{
-    BlockchainGateway, DecodedTransaction, DescriptorType, ResolvedDescriptor, TxInputRef,
-    TxOutput, Utxo, WalletHistory, WalletTxCategory, WalletTxEntry,
+    BlockchainGateway, DecodedTransaction, DescriptorType, ResolvedDescriptor, TxFetchResults,
+    TxInputRef, TxOutput, Utxo, WalletHistory, WalletTxCategory, WalletTxEntry,
 };
 use stealth_model::types::btc_to_amount;
 
@@ -137,6 +138,7 @@ pub fn read_cookie_file(path: &Path) -> Result<(String, String), AnalysisError> 
 pub struct BitcoinCoreRpc {
     config: BitcoinCoreConfig,
     client: Client,
+    max_ancestor_depth: u32,
 }
 
 impl BitcoinCoreRpc {
@@ -146,7 +148,16 @@ impl BitcoinCoreRpc {
             .timeout(None)
             .build()
             .map_err(|error| AnalysisError::EnvironmentUnavailable(error.to_string()))?;
-        Ok(Self { config, client })
+        Ok(Self {
+            config,
+            client,
+            max_ancestor_depth: AnalysisConfig::default().max_ancestor_depth,
+        })
+    }
+
+    pub fn with_max_ancestor_depth(mut self, depth: u32) -> Self {
+        self.max_ancestor_depth = depth;
+        self
     }
 
     /// Construct a gateway from a URL and optional credentials.
@@ -226,6 +237,72 @@ impl BitcoinCoreRpc {
         }
     }
 
+    fn call_batch<T: DeserializeOwned>(
+        &self,
+        method: &str,
+        params_list: &[Vec<Value>],
+    ) -> Result<Vec<Result<T, AnalysisError>>, AnalysisError> {
+        let (user, password) = self.credentials()?;
+        let batch: Vec<Value> = params_list
+            .iter()
+            .enumerate()
+            .map(|(id, params)| {
+                json!({ "jsonrpc": "1.0", "id": id, "method": method, "params": params })
+            })
+            .collect();
+        let response = self
+            .client
+            .post(self.rpc_url(None))
+            .basic_auth(user, Some(password))
+            .json(&batch)
+            .send()
+            .map_err(|error| AnalysisError::EnvironmentUnavailable(error.to_string()))?;
+
+        if !response.status().is_success() {
+            return Err(AnalysisError::EnvironmentUnavailable(format!(
+                "rpc transport error: {}",
+                response.status()
+            )));
+        }
+
+        let mut envelopes = response
+            .json::<Vec<JsonRpcBatchEnvelope<T>>>()
+            .map_err(|error| AnalysisError::EnvironmentUnavailable(error.to_string()))?;
+        if envelopes.len() != params_list.len() {
+            return Err(AnalysisError::EnvironmentUnavailable(format!(
+                "rpc batch returned {} responses for {} requests",
+                envelopes.len(),
+                params_list.len()
+            )));
+        }
+        envelopes.sort_by_key(|envelope| envelope.id);
+        Ok(envelopes
+            .into_iter()
+            .map(|envelope| match (envelope.result, envelope.error) {
+                (Some(result), None) => Ok(result),
+                (_, Some(error)) => Err(AnalysisError::EnvironmentUnavailable(error.message)),
+                _ => Err(AnalysisError::EnvironmentUnavailable(
+                    "rpc returned neither result nor error".into(),
+                )),
+            })
+            .collect())
+    }
+
+    fn decode_transactions(&self, txids: &[Txid]) -> Result<TxFetchResults, AnalysisError> {
+        let mut out = Vec::with_capacity(txids.len());
+        for chunk in txids.chunks(RPC_BATCH_SIZE) {
+            let params: Vec<Vec<Value>> = chunk
+                .iter()
+                .map(|txid| vec![json!(txid.to_string()), json!(true)])
+                .collect();
+            let results = self.call_batch::<RawTransaction>("getrawtransaction", &params)?;
+            for (txid, result) in chunk.iter().zip(results) {
+                out.push((*txid, result.and_then(Self::convert_raw_transaction)));
+            }
+        }
+        Ok(out)
+    }
+
     fn load_history_for_wallet(&self, wallet_name: &str) -> Result<WalletHistory, AnalysisError> {
         let wallet_txs = self.list_transactions(wallet_name)?;
         let utxos = self.list_unspent(wallet_name)?;
@@ -235,19 +312,36 @@ impl BitcoinCoreRpc {
             .collect::<HashSet<_>>();
         txids.extend(utxos.iter().map(|utxo| utxo.txid));
 
+        // Level-order, batched, bounded by max_ancestor_depth (depth 0 is
+        // the wallet's own transactions; those must resolve, ancestors may
+        // be skipped on error).
         let mut transactions = HashMap::new();
-        let mut queue = txids.into_iter().collect::<Vec<_>>();
-        while let Some(txid) = queue.pop() {
-            if transactions.contains_key(&txid) {
-                continue;
+        let mut frontier: Vec<Txid> = txids.into_iter().collect();
+        let mut depth = 0u32;
+        loop {
+            frontier.retain(|txid| !transactions.contains_key(txid));
+            if frontier.is_empty() {
+                break;
             }
-            let tx = self.decode_transaction(txid)?;
-            for input in &tx.vin {
-                if !input.coinbase && !transactions.contains_key(&input.previous_txid) {
-                    queue.push(input.previous_txid);
+            let mut next = HashSet::new();
+            for (txid, fetched) in self.decode_transactions(&frontier)? {
+                let tx = match fetched {
+                    Ok(tx) => tx,
+                    Err(error) if depth == 0 => return Err(error),
+                    Err(_) => continue,
+                };
+                if depth < self.max_ancestor_depth {
+                    for input in tx.vin.iter().filter(|input| !input.coinbase) {
+                        next.insert(input.previous_txid);
+                    }
                 }
+                transactions.insert(txid, tx);
             }
-            transactions.insert(txid, tx);
+            if depth >= self.max_ancestor_depth {
+                break;
+            }
+            frontier = next.into_iter().collect();
+            depth += 1;
         }
 
         Ok(WalletHistory {
@@ -318,7 +412,10 @@ impl BitcoinCoreRpc {
             "getrawtransaction",
             vec![json!(txid.to_string()), json!(true)],
         )?;
+        Self::convert_raw_transaction(tx)
+    }
 
+    fn convert_raw_transaction(tx: RawTransaction) -> Result<DecodedTransaction, AnalysisError> {
         Ok(DecodedTransaction {
             txid: parse_txid(&tx.txid)?,
             vin: tx
@@ -568,6 +665,10 @@ impl BlockchainGateway for BitcoinCoreRpc {
     fn get_transaction(&self, txid: Txid) -> Result<DecodedTransaction, AnalysisError> {
         self.decode_transaction(txid)
     }
+
+    fn get_transactions(&self, txids: &[Txid]) -> Result<TxFetchResults, AnalysisError> {
+        self.decode_transactions(txids)
+    }
 }
 
 /// RAII guard that calls `unloadwallet` when dropped, ensuring cleanup
@@ -634,8 +735,17 @@ fn infer_network_from_port(port: u16) -> String {
     .to_owned()
 }
 
+const RPC_BATCH_SIZE: usize = 100;
+
 #[derive(Debug, Deserialize)]
 struct JsonRpcEnvelope<T> {
+    result: Option<T>,
+    error: Option<JsonRpcError>,
+}
+
+#[derive(Debug, Deserialize)]
+struct JsonRpcBatchEnvelope<T> {
+    id: u64,
     result: Option<T>,
     error: Option<JsonRpcError>,
 }
