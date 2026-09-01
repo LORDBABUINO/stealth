@@ -19,7 +19,8 @@ export default function LoadingScreen({ text, kind }) {
     return () => clearInterval(interval)
   }, [])
 
-  const shortText = text.length > 48 ? `${text.slice(0, 48)}…` : text
+  const safeText = text ?? ''
+  const shortText = safeText.length > 48 ? `${safeText.slice(0, 48)}…` : safeText
   const isChainScan = kind === 'descriptor' || kind === 'xpub'
 
   return (

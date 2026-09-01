@@ -27,4 +27,14 @@ describe('LoadingScreen', () => {
     render(<LoadingScreen text={'a'.repeat(60)} kind="descriptor" />)
     expect(screen.getByText(`${'a'.repeat(48)}…`)).toBeTruthy()
   })
+
+  it('renders without text and kind props instead of crashing', () => {
+    expect(() => render(<LoadingScreen />)).not.toThrow()
+    expect(screen.getByText(/resolving descriptors/i)).toBeTruthy()
+    expect(screen.queryByText(NOTE)).toBeNull()
+  })
+
+  it('tolerates a null text prop', () => {
+    expect(() => render(<LoadingScreen text={null} kind="descriptor" />)).not.toThrow()
+  })
 })
