@@ -84,7 +84,7 @@ describe('InputScreen', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: /analyze/i }))
     expect(onAnalyze).toHaveBeenCalledWith({
-      body: { descriptor: DESC, rescan_since: 1615766400 },
+      body: { descriptor: DESC, rescan_since: 1615680000 },
       kind: 'descriptor',
       text: DESC,
     })

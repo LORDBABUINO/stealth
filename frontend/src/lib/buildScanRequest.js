@@ -1,12 +1,16 @@
-export function buildScanRequest(classified, birthDate) {
-  if (classified.kind === 'utxos') return { utxos: classified.utxos }
+const ONE_DAY = 86400
 
-  const descriptor = classified.kind === 'address'
-    ? `addr(${classified.value})`
-    : classified.value
-  const body = { descriptor }
+export function buildScanRequest(classified, birthDate) {
+  const { kind, value } = classified
+  if (kind === 'utxos') return { utxos: classified.utxos }
+  if (kind !== 'descriptor' && kind !== 'xpub' && kind !== 'address') {
+    throw new Error(`Cannot build a scan request from ${kind} input`)
+  }
+
+  const body = { descriptor: kind === 'address' ? `addr(${value})` : value }
   if (birthDate) {
-    body.rescan_since = Math.floor(Date.parse(`${birthDate}T00:00:00Z`) / 1000)
+    const ts = Math.floor(Date.parse(`${birthDate}T00:00:00Z`) / 1000) - ONE_DAY
+    if (Number.isFinite(ts)) body.rescan_since = ts
   }
   return body
 }
