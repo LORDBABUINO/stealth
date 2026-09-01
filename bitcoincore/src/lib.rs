@@ -139,6 +139,7 @@ pub struct BitcoinCoreRpc {
     config: BitcoinCoreConfig,
     client: Client,
     max_ancestor_depth: u32,
+    tx_page_size: usize,
 }
 
 impl BitcoinCoreRpc {
@@ -152,11 +153,17 @@ impl BitcoinCoreRpc {
             config,
             client,
             max_ancestor_depth: AnalysisConfig::default().max_ancestor_depth,
+            tx_page_size: DEFAULT_TX_PAGE_SIZE,
         })
     }
 
     pub fn with_max_ancestor_depth(mut self, depth: u32) -> Self {
         self.max_ancestor_depth = depth;
+        self
+    }
+
+    pub fn with_tx_page_size(mut self, size: usize) -> Self {
+        self.tx_page_size = size;
         self
     }
 
@@ -354,13 +361,28 @@ impl BitcoinCoreRpc {
     }
 
     fn list_transactions(&self, wallet_name: &str) -> Result<Vec<WalletTxEntry>, AnalysisError> {
-        let entries = self.call::<Vec<ListTransactionEntry>>(
-            Some(wallet_name),
-            "listtransactions",
-            vec![json!("*"), json!(10000), json!(0), json!(true)],
-        )?;
-        entries
+        // A page size of 0 would never terminate the loop.
+        let page_size = self.tx_page_size.max(1);
+        let mut pages = Vec::new();
+        let mut skip = 0usize;
+        loop {
+            let page = self.call::<Vec<ListTransactionEntry>>(
+                Some(wallet_name),
+                "listtransactions",
+                vec![json!("*"), json!(page_size), json!(skip), json!(true)],
+            )?;
+            let page_len = page.len();
+            pages.push(page);
+            if page_len < page_size {
+                break;
+            }
+            skip += page_len;
+        }
+        // skip walks newest-to-oldest; reverse to keep global oldest-first order.
+        pages.reverse();
+        pages
             .into_iter()
+            .flatten()
             .map(|entry| {
                 let address: Option<Address<NetworkUnchecked>> =
                     entry.address.as_deref().and_then(|s| s.parse().ok());
@@ -735,6 +757,7 @@ fn infer_network_from_port(port: u16) -> String {
 }
 
 const RPC_BATCH_SIZE: usize = 100;
+const DEFAULT_TX_PAGE_SIZE: usize = 1000;
 
 #[derive(Debug, Deserialize)]
 struct JsonRpcEnvelope<T> {

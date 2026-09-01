@@ -47,3 +47,32 @@ fn scan_descriptors_derives_addresses_for_unranged_addr_descriptor() {
         history.derived_addresses
     );
 }
+
+// ─── listtransactions pagination ───────────────────────────────────────────
+
+#[test]
+fn list_transactions_paginates_beyond_page_size() {
+    let node = node();
+    let da = node.client.new_address().expect("default address");
+    mine(&node, 110, &da);
+
+    let bob = node.create_wallet("bob").expect("create bob");
+    for _ in 0..12 {
+        let ba = bob.new_address().expect("bob address");
+        node.client
+            .send_to_address(&ba, Amount::from_sat(100_000))
+            .expect("fund bob");
+    }
+    mine(&node, 1, &da);
+
+    let gateway = gateway_for(&node).with_tx_page_size(5);
+    let history = gateway.scan_wallet("bob").expect("scan_wallet");
+
+    assert_eq!(
+        history.wallet_txs.len(),
+        12,
+        "all wallet transactions must be returned across pages"
+    );
+    let unique: HashSet<Txid> = history.wallet_txs.iter().map(|entry| entry.txid).collect();
+    assert_eq!(unique.len(), 12, "pages must not duplicate transactions");
+}
