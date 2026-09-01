@@ -382,3 +382,24 @@ fn report_serialization_is_deterministic() {
         );
     }
 }
+
+#[test]
+fn cioh_and_consolidation_corrections_recommend_payjoin() {
+    let history = build_history();
+    let report = scan(&history);
+    for vtype in [VulnerabilityType::Cioh, VulnerabilityType::Consolidation] {
+        let finding = report
+            .findings
+            .iter()
+            .find(|f| f.vulnerability_type == vtype)
+            .unwrap_or_else(|| panic!("expected a {vtype} finding"));
+        let correction = finding
+            .correction
+            .as_deref()
+            .unwrap_or_else(|| panic!("{vtype} finding has no correction"));
+        assert!(
+            correction.contains("Payjoin"),
+            "{vtype} correction does not mention Payjoin: {correction}"
+        );
+    }
+}

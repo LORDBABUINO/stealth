@@ -169,6 +169,8 @@ impl TxGraph {
                 })),
                 correction: Some(
                     "Use coin control to select only one UTXO per transaction. \
+                     If you are paying someone, prefer a Payjoin (BIP-78) payment: \
+                     it merges inputs without revealing common ownership. \
                      If consolidation is unavoidable, do it privately via a CoinJoin round."
                         .into(),
                 ),
@@ -561,7 +563,9 @@ impl TxGraph {
                     })),
                     correction: Some(
                         "Avoid consolidating many UTXOs into one in a single transaction. \
-                         If fee savings require consolidation, do it through a CoinJoin."
+                         If fee savings require consolidation, do it through a CoinJoin, \
+                         or consolidate opportunistically inside a Payjoin (BIP-78) payment \
+                         so the merge looks like an ordinary spend."
                             .into(),
                     ),
                 });
