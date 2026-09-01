@@ -137,3 +137,12 @@
   from { width: 0%; }
   to { width: 95%; }
 }
+
+.note {
+  margin-top: 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  max-width: 400px;
+  text-align: center;
+}

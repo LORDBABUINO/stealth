@@ -9,7 +9,7 @@ const MESSAGES = [
   'Running vulnerability detectors',
 ]
 
-export default function LoadingScreen({ descriptor }) {
+export default function LoadingScreen({ text, kind }) {
   const [msgIndex, setMsgIndex] = useState(0)
 
   useEffect(() => {
@@ -19,9 +19,8 @@ export default function LoadingScreen({ descriptor }) {
     return () => clearInterval(interval)
   }, [])
 
-  const shortDescriptor = descriptor.length > 48
-    ? `${descriptor.slice(0, 48)}…`
-    : descriptor
+  const shortText = text.length > 48 ? `${text.slice(0, 48)}…` : text
+  const isChainScan = kind === 'descriptor' || kind === 'xpub'
 
   return (
     <div className={styles.root}>
@@ -38,7 +37,12 @@ export default function LoadingScreen({ descriptor }) {
         <div key={msgIndex} className={styles.statusText}>
           {MESSAGES[msgIndex]}<span className={styles.dots}>...</span>
         </div>
-        <div className={styles.descriptor}>{shortDescriptor}</div>
+        <div className={styles.descriptor}>{shortText}</div>
+        {isChainScan && (
+          <div className={styles.note}>
+            Scanning the chain for your wallet's history. This can take a few minutes.
+          </div>
+        )}
       </div>
 
       <div className={styles.progressBar}>
