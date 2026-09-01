@@ -721,10 +721,12 @@ impl Drop for WalletGuard<'_> {
     }
 }
 
+// The pid disambiguates CLI and API scans hitting the same node.
 fn scan_wallet_name(timestamp_millis: u128) -> String {
     static SCAN_WALLET_COUNTER: AtomicU64 = AtomicU64::new(0);
     let sequence = SCAN_WALLET_COUNTER.fetch_add(1, Ordering::Relaxed);
-    format!("_stealth_scan_{timestamp_millis}_{sequence}")
+    let pid = std::process::id();
+    format!("_stealth_scan_{timestamp_millis}_{pid}_{sequence}")
 }
 
 fn parse_txid(s: &str) -> Result<Txid, AnalysisError> {
@@ -906,7 +908,11 @@ mod tests {
     fn scan_wallet_names_differ_for_same_timestamp() {
         let first = scan_wallet_name(1_700_000_000_000);
         let second = scan_wallet_name(1_700_000_000_000);
-        assert!(first.starts_with("_stealth_scan_1700000000000"));
+        let pid = std::process::id();
+        assert!(
+            first.starts_with(&format!("_stealth_scan_1700000000000_{pid}_")),
+            "name must embed the process id to avoid cross-process collisions, got: {first}"
+        );
         assert_ne!(
             first, second,
             "concurrent scans in the same millisecond must not collide"
