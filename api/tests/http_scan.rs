@@ -98,6 +98,29 @@ async fn scan_post_rejects_multiple_input_sources() {
     server.stop().await;
 }
 
+#[tokio::test]
+async fn scan_post_with_bare_xpub_passes_input_validation() {
+    let server = TestServer::spawn().await;
+    let client = reqwest::Client::new();
+
+    let response = client
+        .post(server.url("/api/wallet/scan"))
+        .json(&json!({
+            "descriptor": "xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8Nqtwyb\
+                           GhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8"
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    // A bare xpub in the descriptor field passes input validation; only
+    // the missing gateway stops the scan in this test server.
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    let body: serde_json::Value = response.json().await.unwrap();
+    assert_eq!(body["error"]["code"], "scanner_not_configured");
+    server.stop().await;
+}
+
 struct TestServer {
     address: SocketAddr,
     shutdown_tx: Option<oneshot::Sender<()>>,

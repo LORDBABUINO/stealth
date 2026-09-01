@@ -218,6 +218,14 @@ mod tests {
     }
 
     #[test]
+    fn reencoding_with_canonical_version_is_identity() {
+        assert_eq!(
+            reencode(BIP32_VECTOR1_XPUB, XPUB_VERSION),
+            BIP32_VECTOR1_XPUB
+        );
+    }
+
+    #[test]
     fn zpub_expands_to_wpkh_over_canonical_xpub() {
         let zpub = reencode(BIP32_VECTOR1_XPUB, ZPUB_VERSION);
         assert_eq!(

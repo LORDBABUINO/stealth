@@ -244,7 +244,7 @@ fn print_usage() {
     eprintln!("USAGE:");
     eprintln!("  stealth-cli scan [OPTIONS]\n");
     eprintln!("SCAN INPUT (one required, mutually exclusive):");
-    eprintln!("  --descriptor <DESC>      Single output descriptor");
+    eprintln!("  --descriptor <DESC>      Output descriptor OR bare extended public key");
     eprintln!("  --descriptors <FILE>     JSON array of descriptors");
     eprintln!("  --utxos <FILE>           JSON array of {{txid,vout,...}}\n");
     eprintln!("DESCRIPTOR OPTIONS:");
