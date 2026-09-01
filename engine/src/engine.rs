@@ -145,26 +145,33 @@ impl<'a, G: BlockchainGateway + ?Sized> AnalysisEngine<'a, G> {
         // Fetch ancestor transactions for input resolution, bounded by
         // max_ancestor_depth to prevent unbounded graph traversal.
         // A depth of 0 means we only keep the UTXO's own transaction.
+        // Level-order so the gateway can batch each frontier; failed
+        // ancestor fetches are skipped, transport errors propagate.
         let max_depth = self.settings.config.max_ancestor_depth;
-        if max_depth > 0 {
-            let mut depth_queue: Vec<(Txid, u32)> =
-                fetch_queue.into_iter().map(|txid| (txid, 1)).collect();
-            while let Some((txid, depth)) = depth_queue.pop() {
-                if transactions.contains_key(&txid) {
-                    continue;
-                }
-                if let Ok(tx) = self.gateway.get_transaction(txid) {
-                    if depth < max_depth {
-                        depth_queue.extend(
-                            tx.vin
-                                .iter()
-                                .filter(|i| !i.coinbase)
-                                .map(|i| (i.previous_txid, depth + 1)),
-                        );
+        let mut frontier: Vec<Txid> = fetch_queue
+            .into_iter()
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .filter(|txid| !transactions.contains_key(txid))
+            .collect();
+        let mut depth = 1;
+        while depth <= max_depth && !frontier.is_empty() {
+            let mut next = HashSet::new();
+            for (txid, fetched) in self.gateway.get_transactions(&frontier)? {
+                if let Ok(tx) = fetched {
+                    for input in tx.vin.iter().filter(|i| !i.coinbase) {
+                        if !transactions.contains_key(&input.previous_txid) {
+                            next.insert(input.previous_txid);
+                        }
                     }
                     transactions.insert(txid, tx);
                 }
             }
+            frontier = next
+                .into_iter()
+                .filter(|txid| !transactions.contains_key(txid))
+                .collect();
+            depth += 1;
         }
 
         Ok(WalletHistory {
