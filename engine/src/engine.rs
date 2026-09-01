@@ -56,10 +56,10 @@ impl<'a, G: BlockchainGateway + ?Sized> AnalysisEngine<'a, G> {
     // ── descriptor path ─────────────────────────────────────────────────
 
     fn analyze_descriptors(&self, raw_descriptors: Vec<String>) -> Result<Report, AnalysisError> {
-        let expanded: Vec<String> = raw_descriptors
-            .iter()
-            .flat_map(|raw| expand_input(raw))
-            .collect();
+        let mut expanded = Vec::new();
+        for raw in &raw_descriptors {
+            expanded.extend(expand_input(raw)?);
+        }
         let resolved = normalize_descriptors(
             &expanded,
             self.settings.config.derivation_range_end,

@@ -16,22 +16,24 @@ fn extract_tpub(descriptor: &str) -> Option<String> {
 #[test]
 fn bare_tpub_scan_finds_wallet_activity() {
     let node = node();
-    let da = node.client.new_address().unwrap();
+    let da = node.client.new_address().expect("miner address");
     mine(&node, 110, &da);
 
-    let alice = node.create_wallet("alice").unwrap();
-    let aa = alice.new_address().unwrap();
-    node.client.send_to_address(&aa, Amount::ONE_BTC).unwrap();
+    let alice = node.create_wallet("alice").expect("create alice wallet");
+    let aa = alice.new_address().expect("alice address");
+    node.client
+        .send_to_address(&aa, Amount::ONE_BTC)
+        .expect("fund alice");
     mine(&node, 1, &da);
 
     // Pull the wallet's external wpkh descriptor and reduce it to a
     // bare tpub with on-chain history.
     let descs = alice
         .call::<serde_json::Value>("listdescriptors", &[])
-        .unwrap();
+        .expect("listdescriptors");
     let tpub = descs["descriptors"]
         .as_array()
-        .unwrap()
+        .expect("descriptors array")
         .iter()
         .filter_map(|d| d["desc"].as_str())
         .find(|desc| desc.starts_with("wpkh(") && desc.contains("/0/*"))
@@ -49,4 +51,29 @@ fn bare_tpub_scan_finds_wallet_activity() {
         "expected the wpkh candidate to find the funding tx, got {}",
         report.stats.transactions_analyzed
     );
+}
+
+// ─── Private key inputs must never leak ─────────────────────────────────────
+
+#[test]
+fn xprv_input_is_rejected_without_leaking_the_key() {
+    // BIP-32 test vector 1 private key (published spec constant).
+    let xprv = "xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jP\
+                PqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi";
+
+    // Rejection must happen before any RPC call, so an unreachable
+    // gateway is enough.
+    let gateway =
+        BitcoinCoreRpc::from_url("http://127.0.0.1:1", None, None).expect("offline gateway handle");
+    let engine = AnalysisEngine::new(&gateway, EngineSettings::default());
+    let error = engine
+        .analyze(ScanTarget::Descriptor(xprv.to_owned()))
+        .expect_err("private key input must be rejected");
+
+    let message = error.to_string();
+    assert!(
+        !message.contains(xprv),
+        "private key leaked into error: {message}"
+    );
+    assert!(message.contains("private key"), "{message}");
 }
