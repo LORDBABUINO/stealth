@@ -362,6 +362,37 @@ impl BitcoinCoreRpc {
     }
 
     fn list_transactions(&self, wallet_name: &str) -> Result<Vec<WalletTxEntry>, AnalysisError> {
+        // A block landing mid-pagination shifts the skip windows; refetch once.
+        let tip = self.block_count()?;
+        let mut entries = self.fetch_transaction_pages(wallet_name)?;
+        if self.block_count()? != tip {
+            entries = self.fetch_transaction_pages(wallet_name)?;
+        }
+        entries
+            .into_iter()
+            .map(|entry| {
+                let address: Option<Address<NetworkUnchecked>> =
+                    entry.address.as_deref().and_then(|s| s.parse().ok());
+                Ok(WalletTxEntry {
+                    txid: parse_txid(&entry.txid)?,
+                    address,
+                    category: match entry.category.as_deref() {
+                        Some("send") => WalletTxCategory::Send,
+                        Some("receive") => WalletTxCategory::Receive,
+                        _ => WalletTxCategory::Unknown,
+                    },
+                    amount: btc_to_amount(entry.amount.abs()),
+                    confirmations: entry.confirmations.unwrap_or_default(),
+                    blockheight: entry.blockheight.unwrap_or_default(),
+                })
+            })
+            .collect()
+    }
+
+    fn fetch_transaction_pages(
+        &self,
+        wallet_name: &str,
+    ) -> Result<Vec<ListTransactionEntry>, AnalysisError> {
         // A page size of 0 would never terminate the loop.
         let page_size = self.tx_page_size.max(1);
         let mut pages = Vec::new();
@@ -381,26 +412,11 @@ impl BitcoinCoreRpc {
         }
         // skip walks newest-to-oldest; reverse to keep global oldest-first order.
         pages.reverse();
-        pages
-            .into_iter()
-            .flatten()
-            .map(|entry| {
-                let address: Option<Address<NetworkUnchecked>> =
-                    entry.address.as_deref().and_then(|s| s.parse().ok());
-                Ok(WalletTxEntry {
-                    txid: parse_txid(&entry.txid)?,
-                    address,
-                    category: match entry.category.as_deref() {
-                        Some("send") => WalletTxCategory::Send,
-                        Some("receive") => WalletTxCategory::Receive,
-                        _ => WalletTxCategory::Unknown,
-                    },
-                    amount: btc_to_amount(entry.amount.abs()),
-                    confirmations: entry.confirmations.unwrap_or_default(),
-                    blockheight: entry.blockheight.unwrap_or_default(),
-                })
-            })
-            .collect()
+        Ok(pages.into_iter().flatten().collect())
+    }
+
+    fn block_count(&self) -> Result<u64, AnalysisError> {
+        self.call::<u64>(None, "getblockcount", Vec::new())
     }
 
     fn list_unspent(&self, wallet_name: &str) -> Result<Vec<Utxo>, AnalysisError> {
