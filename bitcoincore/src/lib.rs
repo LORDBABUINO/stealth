@@ -654,19 +654,18 @@ impl BlockchainGateway for BitcoinCoreRpc {
         // Derive ALL addresses from every descriptor (both external and
         // internal chains) so that `is_ours()` in TxGraph recognises
         // every derived address.
-        if let Ok(descriptors) = self.list_wallet_descriptors(wallet_name) {
-            let mut internal_addresses = HashSet::new();
-            let mut derived_addresses = HashSet::new();
-            for desc in &descriptors {
-                let addrs = self.derive_addresses(desc)?;
-                if desc.internal {
-                    internal_addresses.extend(addrs.iter().cloned());
-                }
-                derived_addresses.extend(addrs);
+        let descriptors = self.list_wallet_descriptors(wallet_name)?;
+        let mut internal_addresses = HashSet::new();
+        let mut derived_addresses = HashSet::new();
+        for desc in &descriptors {
+            let addrs = self.derive_addresses(desc)?;
+            if desc.internal {
+                internal_addresses.extend(addrs.iter().cloned());
             }
-            history.internal_addresses = internal_addresses;
-            history.derived_addresses = derived_addresses;
+            derived_addresses.extend(addrs);
         }
+        history.internal_addresses = internal_addresses;
+        history.derived_addresses = derived_addresses;
 
         Ok(history)
     }
