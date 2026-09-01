@@ -9,8 +9,11 @@ const BADGES = {
   descriptor: 'Descriptor',
   xpub: 'Extended public key',
   address: 'Address',
+  private: 'Private key',
   unknown: 'Not recognized',
 }
+
+const RESCAN_KINDS = ['descriptor', 'xpub', 'address']
 
 export default function InputScreen({ onAnalyze }) {
   const [text, setText] = useState('')
@@ -19,12 +22,13 @@ export default function InputScreen({ onAnalyze }) {
   const classified = classifyInput(text)
   const { kind } = classified
   const showBadge = text.trim().length > 0
-  const showBirthDate = kind !== 'utxos'
-  const showWarning = (kind === 'descriptor' || kind === 'xpub') && !birthDate
+  const showBirthDate = kind !== 'utxos' && kind !== 'private'
+  const showWarning = RESCAN_KINDS.includes(kind) && !birthDate
+  const blocked = !text.trim() || kind === 'unknown' || kind === 'private'
 
   function handleSubmit(e) {
     e.preventDefault()
-    if (!text.trim() || kind === 'unknown') return
+    if (blocked) return
     onAnalyze({
       body: buildScanRequest(classified, birthDate),
       kind,
@@ -85,10 +89,16 @@ export default function InputScreen({ onAnalyze }) {
             </p>
           )}
 
+          {kind === 'private' && (
+            <p className={`${styles.warning} ${styles.warningDanger}`}>
+              This looks like a PRIVATE key. Never paste private keys; use the public xpub.
+            </p>
+          )}
+
           <button
             type="submit"
             className={styles.button}
-            disabled={!text.trim() || kind === 'unknown'}
+            disabled={blocked}
           >
             Analyze Wallet
           </button>

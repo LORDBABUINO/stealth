@@ -44,12 +44,12 @@ describe('InputScreen', () => {
     expect(screen.getByText(WARNING)).toBeTruthy()
   })
 
-  it('shows no rescan warning for an address', () => {
+  it('shows the rescan warning for an address without birth date', () => {
     setup()
     type('bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4')
     expect(screen.getByText('Address')).toBeTruthy()
     expect(screen.getByLabelText(/wallet birth date/i)).toBeTruthy()
-    expect(screen.queryByText(WARNING)).toBeNull()
+    expect(screen.getByText(WARNING)).toBeTruthy()
   })
 
   it('hides the birth date field and warning for UTXO lists', () => {
@@ -67,6 +67,25 @@ describe('InputScreen', () => {
       target: { value: '2021-03-15' },
     })
     expect(screen.queryByText(WARNING)).toBeNull()
+  })
+
+  it('blocks private keys with a red badge and an explicit warning', () => {
+    const onAnalyze = setup()
+    type('xprv' + XPUB.slice(4))
+    expect(screen.getByText('Private key')).toBeTruthy()
+    expect(screen.getByText(/never paste private keys.*public xpub/i)).toBeTruthy()
+    expect(screen.queryByText(WARNING)).toBeNull()
+    const button = screen.getByRole('button', { name: /analyze/i })
+    expect(button.disabled).toBe(true)
+    fireEvent.click(button)
+    expect(onAnalyze).not.toHaveBeenCalled()
+  })
+
+  it('blocks a descriptor containing an xprv', () => {
+    setup()
+    type(`wpkh(xprv${XPUB.slice(4)}/0/*)`)
+    expect(screen.getByText('Private key')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /analyze/i }).disabled).toBe(true)
   })
 
   it('disables the submit button for unrecognized input', () => {

@@ -88,6 +88,12 @@
   border-color: var(--warning);
 }
 
+.badge[data-kind='private'] {
+  color: var(--danger);
+  background: var(--danger-dim);
+  border-color: var(--danger);
+}
+
 .dateField {
   margin-top: 16px;
 }
@@ -120,6 +126,12 @@
   border: 1px solid var(--warning);
   border-radius: var(--radius);
   padding: 10px 14px;
+}
+
+.warningDanger {
+  color: var(--danger);
+  background: var(--danger-dim);
+  border-color: var(--danger);
 }
 
 .textarea {
