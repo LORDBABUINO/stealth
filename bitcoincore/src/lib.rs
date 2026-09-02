@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use bitcoin::address::NetworkUnchecked;
@@ -139,6 +140,7 @@ pub struct BitcoinCoreRpc {
     config: BitcoinCoreConfig,
     client: Client,
     max_ancestor_depth: u32,
+    tx_page_size: usize,
 }
 
 impl BitcoinCoreRpc {
@@ -152,11 +154,17 @@ impl BitcoinCoreRpc {
             config,
             client,
             max_ancestor_depth: AnalysisConfig::default().max_ancestor_depth,
+            tx_page_size: DEFAULT_TX_PAGE_SIZE,
         })
     }
 
     pub fn with_max_ancestor_depth(mut self, depth: u32) -> Self {
         self.max_ancestor_depth = depth;
+        self
+    }
+
+    pub fn with_tx_page_size(mut self, size: usize) -> Self {
+        self.tx_page_size = size;
         self
     }
 
@@ -354,11 +362,12 @@ impl BitcoinCoreRpc {
     }
 
     fn list_transactions(&self, wallet_name: &str) -> Result<Vec<WalletTxEntry>, AnalysisError> {
-        let entries = self.call::<Vec<ListTransactionEntry>>(
-            Some(wallet_name),
-            "listtransactions",
-            vec![json!("*"), json!(10000), json!(0), json!(true)],
-        )?;
+        // A block landing mid-pagination shifts the skip windows; refetch once.
+        let tip = self.block_count()?;
+        let mut entries = self.fetch_transaction_pages(wallet_name)?;
+        if self.block_count()? != tip {
+            entries = self.fetch_transaction_pages(wallet_name)?;
+        }
         entries
             .into_iter()
             .map(|entry| {
@@ -378,6 +387,36 @@ impl BitcoinCoreRpc {
                 })
             })
             .collect()
+    }
+
+    fn fetch_transaction_pages(
+        &self,
+        wallet_name: &str,
+    ) -> Result<Vec<ListTransactionEntry>, AnalysisError> {
+        // A page size of 0 would never terminate the loop.
+        let page_size = self.tx_page_size.max(1);
+        let mut pages = Vec::new();
+        let mut skip = 0usize;
+        loop {
+            let page = self.call::<Vec<ListTransactionEntry>>(
+                Some(wallet_name),
+                "listtransactions",
+                vec![json!("*"), json!(page_size), json!(skip), json!(true)],
+            )?;
+            let page_len = page.len();
+            pages.push(page);
+            if page_len < page_size {
+                break;
+            }
+            skip += page_len;
+        }
+        // skip walks newest-to-oldest; reverse to keep global oldest-first order.
+        pages.reverse();
+        Ok(pages.into_iter().flatten().collect())
+    }
+
+    fn block_count(&self) -> Result<u64, AnalysisError> {
+        self.call::<u64>(None, "getblockcount", Vec::new())
     }
 
     fn list_unspent(&self, wallet_name: &str) -> Result<Vec<Utxo>, AnalysisError> {
@@ -513,11 +552,12 @@ impl BlockchainGateway for BitcoinCoreRpc {
         &self,
         descriptor: &ResolvedDescriptor,
     ) -> Result<Vec<Address<NetworkUnchecked>>, AnalysisError> {
-        let strings: Vec<String> = self.call(
-            None,
-            "deriveaddresses",
-            vec![json!(descriptor.desc), json!([0, descriptor.range_end])],
-        )?;
+        // Core rejects a range argument for un-ranged descriptors.
+        let mut params = vec![json!(descriptor.desc)];
+        if descriptor.desc.contains('*') {
+            params.push(json!([0, descriptor.range_end]));
+        }
+        let strings: Vec<String> = self.call(None, "deriveaddresses", params)?;
         strings
             .into_iter()
             .map(|s| {
@@ -532,12 +572,11 @@ impl BlockchainGateway for BitcoinCoreRpc {
         &self,
         descriptors: &[ResolvedDescriptor],
     ) -> Result<WalletHistory, AnalysisError> {
-        let wallet_name = format!(
-            "_stealth_scan_{}",
+        let wallet_name = scan_wallet_name(
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map_err(|error| AnalysisError::EnvironmentUnavailable(error.to_string()))?
-                .as_millis()
+                .as_millis(),
         );
         self.create_watch_only_wallet(&wallet_name)?;
 
@@ -588,12 +627,11 @@ impl BlockchainGateway for BitcoinCoreRpc {
         let mut internal_addresses = HashSet::new();
         let mut derived_addresses = HashSet::new();
         for desc in descriptors {
-            if let Ok(addrs) = self.derive_addresses(desc) {
-                if desc.internal {
-                    internal_addresses.extend(addrs.iter().cloned());
-                }
-                derived_addresses.extend(addrs);
+            let addrs = self.derive_addresses(desc)?;
+            if desc.internal {
+                internal_addresses.extend(addrs.iter().cloned());
             }
+            derived_addresses.extend(addrs);
         }
         history.internal_addresses = internal_addresses;
         history.derived_addresses = derived_addresses;
@@ -632,20 +670,18 @@ impl BlockchainGateway for BitcoinCoreRpc {
         // Derive ALL addresses from every descriptor (both external and
         // internal chains) so that `is_ours()` in TxGraph recognises
         // every derived address.
-        if let Ok(descriptors) = self.list_wallet_descriptors(wallet_name) {
-            let mut internal_addresses = HashSet::new();
-            let mut derived_addresses = HashSet::new();
-            for desc in &descriptors {
-                if let Ok(addrs) = self.derive_addresses(desc) {
-                    if desc.internal {
-                        internal_addresses.extend(addrs.iter().cloned());
-                    }
-                    derived_addresses.extend(addrs);
-                }
+        let descriptors = self.list_wallet_descriptors(wallet_name)?;
+        let mut internal_addresses = HashSet::new();
+        let mut derived_addresses = HashSet::new();
+        for desc in &descriptors {
+            let addrs = self.derive_addresses(desc)?;
+            if desc.internal {
+                internal_addresses.extend(addrs.iter().cloned());
             }
-            history.internal_addresses = internal_addresses;
-            history.derived_addresses = derived_addresses;
+            derived_addresses.extend(addrs);
         }
+        history.internal_addresses = internal_addresses;
+        history.derived_addresses = derived_addresses;
 
         Ok(history)
     }
@@ -683,6 +719,14 @@ impl Drop for WalletGuard<'_> {
         self.rpc.abort_rescan(self.name);
         self.rpc.unload_wallet(self.name);
     }
+}
+
+// The pid disambiguates CLI and API scans hitting the same node.
+fn scan_wallet_name(timestamp_millis: u128) -> String {
+    static SCAN_WALLET_COUNTER: AtomicU64 = AtomicU64::new(0);
+    let sequence = SCAN_WALLET_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let pid = std::process::id();
+    format!("_stealth_scan_{timestamp_millis}_{pid}_{sequence}")
 }
 
 fn parse_txid(s: &str) -> Result<Txid, AnalysisError> {
@@ -736,6 +780,7 @@ fn infer_network_from_port(port: u16) -> String {
 }
 
 const RPC_BATCH_SIZE: usize = 100;
+const DEFAULT_TX_PAGE_SIZE: usize = 1000;
 
 #[derive(Debug, Deserialize)]
 struct JsonRpcEnvelope<T> {
@@ -849,7 +894,7 @@ struct RawScriptPubKey {
 
 #[cfg(test)]
 mod tests {
-    use super::default_rpc_port;
+    use super::{default_rpc_port, scan_wallet_name};
 
     #[test]
     fn network_defaults_match_bitcoin_core_ports() {
@@ -857,5 +902,20 @@ mod tests {
         assert_eq!(default_rpc_port("testnet"), 18332);
         assert_eq!(default_rpc_port("signet"), 38332);
         assert_eq!(default_rpc_port("mainnet"), 8332);
+    }
+
+    #[test]
+    fn scan_wallet_names_differ_for_same_timestamp() {
+        let first = scan_wallet_name(1_700_000_000_000);
+        let second = scan_wallet_name(1_700_000_000_000);
+        let pid = std::process::id();
+        assert!(
+            first.starts_with(&format!("_stealth_scan_1700000000000_{pid}_")),
+            "name must embed the process id to avoid cross-process collisions, got: {first}"
+        );
+        assert_ne!(
+            first, second,
+            "concurrent scans in the same millisecond must not collide"
+        );
     }
 }
