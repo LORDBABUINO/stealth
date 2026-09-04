@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use bitcoin::{Amount, Txid};
 use serde_json::json;
@@ -43,6 +43,13 @@ impl TxGraph {
         self.detect_unnecessary_input(&mut findings);
         self.detect_toxic_change(thresholds, &mut findings);
 
+        for list in [&mut findings, &mut warnings] {
+            list.sort_by(|a, b| {
+                (a.vulnerability_type as u8, a.description.as_str())
+                    .cmp(&(b.vulnerability_type as u8, b.description.as_str()))
+            });
+        }
+
         let stats = Stats {
             transactions_analyzed: self.our_txids.len(),
             addresses_seen: self.addr_map.len(),
@@ -52,10 +59,20 @@ impl TxGraph {
         Report::new(stats, findings, warnings)
     }
 
+    /// Our transaction IDs in a stable order, so detector output never
+    /// depends on `HashSet` iteration order.
+    fn ordered_txids(&self) -> Vec<Txid> {
+        let mut txids: Vec<Txid> = self.our_txids.iter().copied().collect();
+        txids.sort_unstable();
+        txids
+    }
+
     // ── 1. Address Reuse ───────────────────────────────────────────────────
 
     fn detect_address_reuse(&self, findings: &mut Vec<Finding>) {
-        for addr in &self.our_addrs {
+        let mut addrs: Vec<_> = self.our_addrs.iter().collect();
+        addrs.sort_unstable();
+        for addr in addrs {
             let entries = match self.addr_txs.get(addr) {
                 Some(e) => e,
                 None => continue,
@@ -67,6 +84,8 @@ impl TxGraph {
                 .collect();
 
             if receive_txids.len() >= 2 {
+                let mut reuse_txids: Vec<Txid> = receive_txids.iter().copied().collect();
+                reuse_txids.sort_unstable();
                 let meta = self.addr_map.get(addr);
                 let role = if meta.is_some_and(|m: &AddressInfo| m.internal) {
                     "change"
@@ -85,8 +104,8 @@ impl TxGraph {
                     details: Some(json!({
                         "address": addr.assume_checked_ref().to_string(),
                         "role": role,
-                        "tx_count": receive_txids.len(),
-                        "txids": receive_txids.iter().collect::<Vec<_>>(),
+                        "tx_count": reuse_txids.len(),
+                        "txids": reuse_txids,
                     })),
                     correction: Some(
                         "Generate a fresh address for every payment received. \
@@ -102,7 +121,7 @@ impl TxGraph {
     // ── 2. Common Input Ownership Heuristic (CIOH) ─────────────────────────
 
     fn detect_cioh(&self, findings: &mut Vec<Finding>) {
-        let txids: Vec<Txid> = self.our_txids.iter().copied().collect();
+        let txids = self.ordered_txids();
         for txid in &txids {
             let tx = match self.fetch_tx(txid) {
                 Some(t) => t,
@@ -150,6 +169,8 @@ impl TxGraph {
                 })),
                 correction: Some(
                     "Use coin control to select only one UTXO per transaction. \
+                     If you are paying someone, prefer a Payjoin (BIP-78) payment: \
+                     it merges inputs without revealing common ownership. \
                      If consolidation is unavoidable, do it privately via a CoinJoin round."
                         .into(),
                 ),
@@ -238,7 +259,7 @@ impl TxGraph {
         }
 
         // Historical dust (already spent)
-        let txids: Vec<Txid> = self.our_txids.iter().copied().collect();
+        let txids = self.ordered_txids();
         let current_keys: HashSet<(Txid, String)> = self
             .utxos
             .iter()
@@ -353,7 +374,7 @@ impl TxGraph {
         let dust = thresholds.dust;
         let normal_min = thresholds.normal_input_min;
 
-        let txids: Vec<Txid> = self.our_txids.iter().copied().collect();
+        let txids = self.ordered_txids();
         for txid in &txids {
             let input_addrs = self.get_input_addresses(txid);
             if input_addrs.len() < 2 {
@@ -406,7 +427,7 @@ impl TxGraph {
     // ── 5. Change Detection ────────────────────────────────────────────────
 
     fn detect_change_detection(&self, findings: &mut Vec<Finding>) {
-        let txids: Vec<Txid> = self.our_txids.iter().copied().collect();
+        let txids = self.ordered_txids();
         for txid in &txids {
             let outputs = self.get_output_addresses(txid);
             if outputs.len() < 2 {
@@ -542,7 +563,9 @@ impl TxGraph {
                     })),
                     correction: Some(
                         "Avoid consolidating many UTXOs into one in a single transaction. \
-                         If fee savings require consolidation, do it through a CoinJoin."
+                         If fee savings require consolidation, do it through a CoinJoin, \
+                         or consolidate opportunistically inside a Payjoin (BIP-78) payment \
+                         so the merge looks like an ordinary spend."
                             .into(),
                     ),
                 });
@@ -553,7 +576,7 @@ impl TxGraph {
     // ── 7. Script Type Mixing ──────────────────────────────────────────────
 
     fn detect_script_type_mixing(&self, findings: &mut Vec<Finding>) {
-        let txids: Vec<Txid> = self.our_txids.iter().copied().collect();
+        let txids = self.ordered_txids();
         for txid in &txids {
             let input_addrs = self.get_input_addresses(txid);
             if input_addrs.len() < 2 {
@@ -599,7 +622,7 @@ impl TxGraph {
     // ── 8. Cluster Merge ───────────────────────────────────────────────────
 
     fn detect_cluster_merge(&self, findings: &mut Vec<Finding>) {
-        let txids: Vec<Txid> = self.our_txids.iter().copied().collect();
+        let txids = self.ordered_txids();
         for txid in &txids {
             let input_addrs = self.get_input_addresses(txid);
             if input_addrs.len() < 2 {
@@ -658,8 +681,12 @@ impl TxGraph {
                         details: Some(json!({
                             "txid": txid,
                             "funding_sources": funding_sources.iter()
-                                .map(|(k, v)| (k.clone(), v.iter().cloned().collect::<Vec<_>>()))
-                                .collect::<HashMap<_, _>>(),
+                                .map(|(k, v)| {
+                                    let mut sources: Vec<String> = v.iter().cloned().collect();
+                                    sources.sort_unstable();
+                                    (k.clone(), sources)
+                                })
+                                .collect::<BTreeMap<_, _>>(),
                         })),
                         correction: Some(
                             "Use coin control to spend UTXOs from only one funding source \
@@ -759,7 +786,7 @@ impl TxGraph {
     ) {
         let batch_threshold = thresholds.exchange_batch_min_outputs;
 
-        let txids: Vec<Txid> = self.our_txids.iter().copied().collect();
+        let txids = self.ordered_txids();
         for txid in &txids {
             let tx = match self.fetch_tx(txid) {
                 Some(t) => t,
@@ -859,7 +886,7 @@ impl TxGraph {
             _ => return,
         };
 
-        let txids: Vec<Txid> = self.our_txids.iter().copied().collect();
+        let txids = self.ordered_txids();
 
         for txid in &txids {
             let input_addrs = self.get_input_addresses(txid);
@@ -943,7 +970,7 @@ impl TxGraph {
     fn detect_behavioral_fingerprint(&self, findings: &mut Vec<Finding>) {
         // Collect send transactions. Prefer explicit wallet-side `send`
         // labels and fall back to ownership inferred from inputs.
-        let txids: Vec<Txid> = self.our_txids.iter().copied().collect();
+        let txids = self.ordered_txids();
         let send_labeled_txids: HashSet<Txid> = self
             .addr_txs
             .values()
@@ -1039,11 +1066,16 @@ impl TxGraph {
         }
 
         // Script type consistency
-        let input_types_set: HashSet<&String> = input_script_types.iter().collect();
-        if input_types_set.len() > 1 {
+        let mut input_types: Vec<&String> = input_script_types
+            .iter()
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect();
+        input_types.sort_unstable();
+        if input_types.len() > 1 {
             problems.push(format!(
                 "Mixed input script types used across TXs: {:?}.",
-                input_types_set
+                input_types
             ));
         }
 
@@ -1130,7 +1162,7 @@ impl TxGraph {
         let min_hops = thresholds.peel_chain_min_hops;
         let critical_hops = thresholds.peel_chain_critical_hops;
 
-        let txids: Vec<Txid> = self.our_txids.iter().copied().collect();
+        let txids = self.ordered_txids();
         for txid in txids {
             let input_addrs = self.get_input_addresses(&txid);
             let our_in: Vec<_> = input_addrs
@@ -1245,7 +1277,7 @@ impl TxGraph {
         warnings: &mut Vec<Finding>,
     ) {
         let low_ambiguity_cutoff = thresholds.low_ambiguity_cutoff;
-        let txids: Vec<Txid> = self.our_txids.iter().copied().collect();
+        let txids = self.ordered_txids();
         for txid in txids {
             let inputs = self.get_input_addresses(&txid);
             let outputs = self.get_output_addresses(&txid);
@@ -1399,7 +1431,7 @@ impl TxGraph {
     // needlessly links more addresses via CIOH.
 
     fn detect_unnecessary_input(&self, findings: &mut Vec<Finding>) {
-        let txids: Vec<Txid> = self.our_txids.iter().copied().collect();
+        let txids = self.ordered_txids();
         for txid in txids {
             let input_addrs = self.get_input_addresses(&txid);
             if input_addrs.len() < 2 {
@@ -1485,7 +1517,7 @@ impl TxGraph {
         let toxic_lower = thresholds.toxic_change_lower;
         let toxic_upper = thresholds.toxic_change_upper;
 
-        let txids: Vec<Txid> = self.our_txids.iter().copied().collect();
+        let txids = self.ordered_txids();
         for txid in txids {
             let input_addrs = self.get_input_addresses(&txid);
             let our_in: Vec<_> = input_addrs
