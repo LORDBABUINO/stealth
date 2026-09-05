@@ -18,3 +18,4 @@ mod gateway;
 mod linkage;
 mod origins;
 mod scanning;
+mod xpub;

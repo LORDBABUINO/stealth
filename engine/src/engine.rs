@@ -9,7 +9,7 @@ use std::collections::{HashMap, HashSet};
 
 use bitcoin::{Amount, Txid};
 
-use crate::descriptor::normalize_descriptors;
+use crate::descriptor::{expand_input, normalize_descriptors};
 use crate::error::AnalysisError;
 use crate::gateway::{
     BlockchainGateway, DecodedTransaction, DescriptorType, Utxo, WalletHistory, WalletTxCategory,
@@ -56,8 +56,12 @@ impl<'a, G: BlockchainGateway + ?Sized> AnalysisEngine<'a, G> {
     // ── descriptor path ─────────────────────────────────────────────────
 
     fn analyze_descriptors(&self, raw_descriptors: Vec<String>) -> Result<Report, AnalysisError> {
+        let mut expanded = Vec::new();
+        for raw in &raw_descriptors {
+            expanded.extend(expand_input(raw)?);
+        }
         let resolved = normalize_descriptors(
-            &raw_descriptors,
+            &expanded,
             self.settings.config.derivation_range_end,
             self.settings.rescan_since,
             self.gateway,
