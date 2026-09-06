@@ -176,3 +176,20 @@ async fn post_scan_accepts_rescan_since_alongside_descriptor() {
     assert_eq!(body["error"]["code"], "scanner_not_configured");
     server.stop().await;
 }
+
+#[tokio::test]
+async fn post_scan_accepts_utxos_with_ownership_descriptors() {
+    let server = TestServer::spawn().await;
+    let response = reqwest::Client::new()
+        .post(server.url("/api/wallet/scan"))
+        .json(&serde_json::json!({
+            "utxos": [{"txid": "d0bf39108641739b186eb18f2992320fa679b4b3ffe787c5ee1f677d1cc1784d", "vout": 0}],
+            "descriptors": ["wpkh(x/0/*)"]
+        }))
+        .send()
+        .await
+        .expect("request failed");
+    // Combined input passes validation; only the missing gateway stops it.
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    server.stop().await;
+}

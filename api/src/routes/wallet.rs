@@ -27,12 +27,13 @@ async fn scan_post(
     Json(body): Json<ScanRequestBody>,
 ) -> Result<Json<Report>, ApiError> {
     let rescan_since = body.rescan_since;
-    let target = body.into_scan_target()?;
+    let (target, ownership_descriptors) = body.into_scan_request()?;
 
     let gw = gateway.ok_or(ApiError::ScannerNotConfigured)?;
     let report = tokio::task::spawn_blocking(move || {
         let settings = EngineSettings {
             rescan_since,
+            ownership_descriptors,
             ..EngineSettings::default()
         };
         let engine = AnalysisEngine::new(gw.as_ref(), settings);
@@ -45,13 +46,25 @@ async fn scan_post(
 }
 
 impl ScanRequestBody {
-    fn into_scan_target(self) -> Result<ScanTarget, ApiError> {
+    fn into_scan_request(self) -> Result<(ScanTarget, Vec<String>), ApiError> {
         match (self.descriptor, self.descriptors, self.utxos) {
-            (Some(d), None, None) => Ok(ScanTarget::Descriptor(d)),
-            (None, Some(ds), None) if !ds.is_empty() => Ok(ScanTarget::Descriptors(ds)),
+            (Some(d), None, None) => Ok((ScanTarget::Descriptor(d), Vec::new())),
+            (None, Some(ds), None) if !ds.is_empty() => {
+                Ok((ScanTarget::Descriptors(ds), Vec::new()))
+            }
             (None, Some(_), None) => Err(ApiError::bad_request("`descriptors` must not be empty")),
-            (None, None, Some(utxos)) if !utxos.is_empty() => Ok(ScanTarget::Utxos(utxos)),
+            (None, None, Some(utxos)) if !utxos.is_empty() => {
+                Ok((ScanTarget::Utxos(utxos), Vec::new()))
+            }
             (None, None, Some(_)) => Err(ApiError::bad_request("`utxos` must not be empty")),
+            // utxos + descriptors: the descriptors are ownership context,
+            // letting is_ours() recognise the user's own inputs.
+            (None, Some(ds), Some(utxos)) if !utxos.is_empty() && !ds.is_empty() => {
+                Ok((ScanTarget::Utxos(utxos), ds))
+            }
+            (None, Some(_), Some(_)) => Err(ApiError::bad_request(
+                "`utxos` and `descriptors` must not be empty when combined",
+            )),
             (None, None, None) => Err(ApiError::bad_request(
                 "one input source is required: descriptor, descriptors, or utxos",
             )),

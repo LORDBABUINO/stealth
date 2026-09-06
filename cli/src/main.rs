@@ -43,6 +43,7 @@ fn run_scan(args: &[String]) -> Result<bool, String> {
 
     let settings = EngineSettings {
         rescan_since: opts.rescan_since,
+        ownership_descriptors: opts.ownership_descriptors()?,
         ..EngineSettings::default()
     };
     let engine = AnalysisEngine::new(&gateway, settings);
@@ -102,47 +103,34 @@ impl ScanOpts {
     }
 
     fn scan_target(&self) -> Result<ScanTarget, String> {
-        let mut sources = 0usize;
-        if self.descriptor.is_some() {
-            sources += 1;
-        }
-        if self.descriptors_file.is_some() {
-            sources += 1;
-        }
-        if self.utxos_file.is_some() {
-            sources += 1;
+        if self.descriptor.is_some()
+            && (self.descriptors_file.is_some() || self.utxos_file.is_some())
+        {
+            return Err("--descriptor cannot be combined with other inputs".to_owned());
         }
 
-        if sources == 0 {
-            return Err(
-                "one input is required: --descriptor, --descriptors, or --utxos".to_owned(),
-            );
+        // --utxos may be combined with --descriptors: the descriptors act
+        // as ownership context so the scan recognises the user's inputs.
+        if let Some(path) = &self.utxos_file {
+            let utxos: Vec<UtxoInput> = read_json(path)?;
+            return Ok(ScanTarget::Utxos(utxos));
         }
-        if sources > 1 {
-            return Err(
-                "--descriptor, --descriptors, and --utxos are mutually exclusive".to_owned(),
-            );
+        if let Some(path) = &self.descriptors_file {
+            let descriptors: Vec<String> = read_json(path)?;
+            return Ok(ScanTarget::Descriptors(descriptors));
         }
-
         if let Some(d) = &self.descriptor {
             return Ok(ScanTarget::Descriptor(d.clone()));
         }
-        if let Some(path) = &self.descriptors_file {
-            let content = fs::read_to_string(path)
-                .map_err(|e| format!("cannot read {}: {e}", path.display()))?;
-            let descriptors: Vec<String> = serde_json::from_str(&content)
-                .map_err(|e| format!("invalid JSON in {}: {e}", path.display()))?;
-            return Ok(ScanTarget::Descriptors(descriptors));
-        }
-        if let Some(path) = &self.utxos_file {
-            let content = fs::read_to_string(path)
-                .map_err(|e| format!("cannot read {}: {e}", path.display()))?;
-            let utxos: Vec<UtxoInput> = serde_json::from_str(&content)
-                .map_err(|e| format!("invalid JSON in {}: {e}", path.display()))?;
-            return Ok(ScanTarget::Utxos(utxos));
-        }
 
-        Err("no scan target specified".to_owned())
+        Err("one input is required: --descriptor, --descriptors, or --utxos".to_owned())
+    }
+
+    fn ownership_descriptors(&self) -> Result<Vec<String>, String> {
+        match (&self.utxos_file, &self.descriptors_file) {
+            (Some(_), Some(path)) => read_json(path),
+            _ => Ok(Vec::new()),
+        }
     }
 }
 
@@ -187,6 +175,12 @@ fn parse_scan_args(args: &[String]) -> Result<ScanOpts, String> {
     }
 
     Ok(opts)
+}
+
+fn read_json<T: serde::de::DeserializeOwned>(path: &PathBuf) -> Result<T, String> {
+    let content =
+        fs::read_to_string(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+    serde_json::from_str(&content).map_err(|e| format!("invalid JSON in {}: {e}", path.display()))
 }
 
 fn take_value(args: &[String], i: &mut usize, flag: &str) -> Result<String, String> {
@@ -246,7 +240,9 @@ fn print_usage() {
     eprintln!("SCAN INPUT (one required, mutually exclusive):");
     eprintln!("  --descriptor <DESC>      Output descriptor OR bare extended public key");
     eprintln!("  --descriptors <FILE>     JSON array of descriptors");
-    eprintln!("  --utxos <FILE>           JSON array of {{txid,vout,...}}\n");
+    eprintln!("  --utxos <FILE>           JSON array of {{txid,vout,...}}");
+    eprintln!("                           May be combined with --descriptors, which then");
+    eprintln!("                           act as ownership context for the analysis\n");
     eprintln!("DESCRIPTOR OPTIONS:");
     eprintln!("  --rescan-since <UNIX_TS> Rescan from this time when importing");
     eprintln!("                           descriptors (default: genesis; set this");
@@ -288,5 +284,39 @@ mod tests {
     #[test]
     fn rejects_non_numeric_rescan_since() {
         assert!(parse_scan_args(&to_args(&["--rescan-since", "yesterday"])).is_err());
+    }
+}
+
+#[cfg(test)]
+mod ownership_tests {
+    use super::*;
+
+    fn temp_file(name: &str, contents: &str) -> PathBuf {
+        let path =
+            std::env::temp_dir().join(format!("stealth-cli-test-{}-{name}", std::process::id()));
+        fs::write(&path, contents).expect("write temp file");
+        path
+    }
+
+    #[test]
+    fn utxos_with_descriptors_is_ownership_context() {
+        let utxos = temp_file(
+            "utxos.json",
+            r#"[{"txid": "d0bf39108641739b186eb18f2992320fa679b4b3ffe787c5ee1f677d1cc1784d", "vout": 0}]"#,
+        );
+        let descriptors = temp_file("descs.json", r#"["wpkh(x/0/*)"]"#);
+        let opts = ScanOpts {
+            utxos_file: Some(utxos),
+            descriptors_file: Some(descriptors),
+            ..ScanOpts::default()
+        };
+
+        let target = opts.scan_target().expect("combined input must be accepted");
+        assert!(matches!(target, ScanTarget::Utxos(ref u) if u.len() == 1));
+        assert_eq!(
+            opts.ownership_descriptors()
+                .expect("ownership descriptors must load"),
+            vec!["wpkh(x/0/*)".to_owned()]
+        );
     }
 }
