@@ -20,6 +20,8 @@ use crate::types::Report;
 
 pub use stealth_model::scan::{EngineSettings, ScanTarget, UtxoInput};
 
+type AddressSet = HashSet<bitcoin::Address<bitcoin::address::NetworkUnchecked>>;
+
 // ── Engine ──────────────────────────────────────────────────────────────────
 
 /// Runs a privacy analysis through a [`BlockchainGateway`].
@@ -109,6 +111,7 @@ impl<'a, G: BlockchainGateway + ?Sized> AnalysisEngine<'a, G> {
             }
 
             let tx = &transactions[&utxo.txid];
+            let confirmations = tx.confirmations;
 
             let address = utxo.address.clone().or_else(|| {
                 tx.vout
@@ -131,7 +134,7 @@ impl<'a, G: BlockchainGateway + ?Sized> AnalysisEngine<'a, G> {
                     address: address.clone(),
                     category: WalletTxCategory::Receive,
                     amount: value,
-                    confirmations: 0,
+                    confirmations,
                     blockheight: 0,
                 });
             }
@@ -141,7 +144,7 @@ impl<'a, G: BlockchainGateway + ?Sized> AnalysisEngine<'a, G> {
                 vout: utxo.vout,
                 address,
                 amount: value,
-                confirmations: 0,
+                confirmations,
                 script_type: DescriptorType::Unknown,
             });
         }
@@ -178,12 +181,43 @@ impl<'a, G: BlockchainGateway + ?Sized> AnalysisEngine<'a, G> {
             depth += 1;
         }
 
+        let (internal_addresses, derived_addresses) = self.derive_ownership_addresses()?;
+
         Ok(WalletHistory {
             wallet_txs,
             utxos: utxo_entries,
             transactions,
-            internal_addresses: HashSet::new(),
-            derived_addresses: HashSet::new(),
+            internal_addresses,
+            derived_addresses,
         })
+    }
+
+    /// Derive the addresses of `ownership_descriptors` so `is_ours()` can
+    /// recognise the user's own inputs in UTXO scans.
+    fn derive_ownership_addresses(&self) -> Result<(AddressSet, AddressSet), AnalysisError> {
+        let mut internal = HashSet::new();
+        let mut derived = HashSet::new();
+        if self.settings.ownership_descriptors.is_empty() {
+            return Ok((internal, derived));
+        }
+
+        let mut expanded = Vec::new();
+        for raw in &self.settings.ownership_descriptors {
+            expanded.extend(expand_input(raw)?);
+        }
+        let resolved = normalize_descriptors(
+            &expanded,
+            self.settings.config.derivation_range_end,
+            self.settings.rescan_since,
+            self.gateway,
+        )?;
+        for descriptor in &resolved {
+            let addrs = self.gateway.derive_addresses(descriptor)?;
+            if descriptor.internal {
+                internal.extend(addrs.iter().cloned());
+            }
+            derived.extend(addrs);
+        }
+        Ok((internal, derived))
     }
 }
