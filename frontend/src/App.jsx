@@ -2,18 +2,19 @@ import { useState } from 'react'
 import InputScreen from './screens/InputScreen'
 import LoadingScreen from './screens/LoadingScreen'
 import ReportScreen from './screens/ReportScreen'
+import ErrorBoundary from './components/ErrorBoundary'
 import { analyzeWallet } from './services/walletService'
 
 export default function App() {
   const [screen, setScreen] = useState('input')
-  const [descriptor, setDescriptor] = useState('')
+  const [scan, setScan] = useState(null)
   const [report, setReport] = useState(null)
 
-  async function handleAnalyze(desc) {
-    setDescriptor(desc)
+  async function handleAnalyze(nextScan) {
+    setScan(nextScan)
     setScreen('loading')
     try {
-      const result = await analyzeWallet(desc)
+      const result = await analyzeWallet(nextScan.body)
       setReport(result)
       setScreen('report')
     } catch (err) {
@@ -24,11 +25,15 @@ export default function App() {
 
   function handleReset() {
     setScreen('input')
-    setDescriptor('')
+    setScan(null)
     setReport(null)
   }
 
-  if (screen === 'loading') return <LoadingScreen descriptor={descriptor} />
-  if (screen === 'report') return <ReportScreen report={report} descriptor={descriptor} onReset={handleReset} />
-  return <InputScreen onAnalyze={handleAnalyze} />
+  function renderScreen() {
+    if (screen === 'loading') return <LoadingScreen text={scan?.text} kind={scan?.kind} />
+    if (screen === 'report') return <ReportScreen report={report} descriptor={scan?.text} onReset={handleReset} />
+    return <InputScreen onAnalyze={handleAnalyze} />
+  }
+
+  return <ErrorBoundary onReset={handleReset}>{renderScreen()}</ErrorBoundary>
 }
