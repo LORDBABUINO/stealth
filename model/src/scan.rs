@@ -37,4 +37,5 @@ pub struct EngineSettings {
     pub known_risky_txids: Option<HashSet<Txid>>,
     pub known_exchange_txids: Option<HashSet<Txid>>,
     pub rescan_since: Option<u64>,
+    pub ownership_descriptors: Vec<String>,
 }

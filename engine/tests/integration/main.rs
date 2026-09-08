@@ -18,4 +18,5 @@ mod gateway;
 mod linkage;
 mod origins;
 mod scanning;
+mod utxo_mode;
 mod xpub;
